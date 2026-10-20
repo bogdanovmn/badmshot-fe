@@ -2,8 +2,13 @@
   <div class="page">
     <div class="heading-row">
       <BackButton fallback="/archive" />
-      <h1>Индексация архива</h1>
+      <h1>Управление архивом</h1>
     </div>
+
+    <p class="hint">
+      Обновление метаинформации проверяет структуру архива и имена файлов, не создавая кадры.
+      Перезапись кадров удаляет все скриншоты из БД и создаёт их заново с текущими параметрами.
+    </p>
 
     <section class="options">
       <label class="field">
@@ -45,8 +50,11 @@
     </section>
 
     <div class="actions">
-      <button class="btn-primary" :disabled="starting || active" @click="start">
-        {{ active ? 'Выполняется...' : 'Запустить' }}
+      <button class="btn-primary" :disabled="starting !== null || active" @click="start('META')">
+        {{ starting === 'META' ? 'Запуск...' : 'Обновить метаинформацию' }}
+      </button>
+      <button class="btn-secondary" :disabled="starting !== null || active" @click="start('SCREENSHOTS')">
+        {{ starting === 'SCREENSHOTS' ? 'Запуск...' : 'Перезаписать скриншоты' }}
       </button>
       <button class="btn-secondary" :disabled="cancelling || !active" @click="cancel">Отменить</button>
     </div>
@@ -56,7 +64,7 @@
     <section v-if="job" class="status">
       <div class="status-head">
         <span class="badge" :class="statusClass">{{ statusLabel }}</span>
-        <span class="phase">{{ job.phase || '—' }}</span>
+        <span class="phase">{{ phaseLabel }}</span>
         <span v-if="job.id" class="job-id">{{ job.id }}</span>
       </div>
 
@@ -71,21 +79,23 @@
 
       <div class="times">
         <span>Начато: {{ formatDateTime(job.startedAt) }}</span>
+        <span>Длительность: {{ formatElapsed(durationSeconds) }}</span>
         <span>Активность: {{ formatDateTime(job.lastActivityAt) }}</span>
         <span v-if="job.finishedAt">Завершено: {{ formatDateTime(job.finishedAt) }}</span>
       </div>
 
       <div v-if="job.error" class="job-error">{{ job.error }}</div>
     </section>
-    <div v-else-if="!loading" class="empty">Задач индексации ещё не было.</div>
+    <div v-else-if="!loading" class="empty">Задач управления ещё не было.</div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { cancelIndexJob, getIndexJob, startIndexJob } from '@/api'
-import type { IndexOptions, JobResponse } from '@/api'
+import type { ArchiveJobMode, IndexOptions, JobResponse } from '@/api'
 import BackButton from '@/components/BackButton.vue'
+import { formatElapsed } from '@/common'
 
 const options = reactive<IndexOptions>({
   screenshotsCount: 12,
@@ -99,7 +109,7 @@ const options = reactive<IndexOptions>({
 
 const job = ref<JobResponse | null>(null)
 const loading = ref(true)
-const starting = ref(false)
+const starting = ref<ArchiveJobMode | null>(null)
 const cancelling = ref(false)
 const error = ref<string | null>(null)
 
@@ -111,6 +121,14 @@ const percent = computed(() => {
     return 0
   }
   return Math.min(100, Math.round((job.value.processedFiles / job.value.totalFiles) * 100))
+})
+const durationSeconds = computed(() => {
+  if (!job.value) {
+    return 0
+  }
+  const started = new Date(job.value.startedAt).getTime()
+  const finished = job.value.finishedAt ? new Date(job.value.finishedAt).getTime() : Date.now()
+  return Math.max(0, Math.round((finished - started) / 1000))
 })
 
 const statusLabels: Record<string, string> = {
@@ -124,6 +142,17 @@ const statusLabels: Record<string, string> = {
 
 const statusLabel = computed(() => job.value ? statusLabels[job.value.status] || job.value.status : '')
 const statusClass = computed(() => job.value ? job.value.status.toLowerCase() : '')
+const phaseLabels: Record<string, string> = {
+  META: 'Метаинформация',
+  SCREENSHOTS: 'Скриншоты',
+  DONE: 'Готово'
+}
+const phaseLabel = computed(() => {
+  if (!job.value?.phase) {
+    return '—'
+  }
+  return phaseLabels[job.value.phase] || job.value.phase
+})
 
 function formatDateTime(value: string): string {
   const date = new Date(value)
@@ -151,16 +180,16 @@ function schedule() {
   }
 }
 
-async function start() {
-  starting.value = true
+async function start(mode: ArchiveJobMode) {
+  starting.value = mode
   error.value = null
   try {
-    job.value = await startIndexJob({ ...options })
+    job.value = await startIndexJob({ ...options, mode })
     schedule()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Не удалось запустить задачу'
   } finally {
-    starting.value = false
+    starting.value = null
   }
 }
 
@@ -200,6 +229,13 @@ onBeforeUnmount(() => {
 
 h1 {
   font-size: 1.4rem;
+}
+
+.hint {
+  max-width: 780px;
+  color: var(--color-muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
 }
 
 .options {

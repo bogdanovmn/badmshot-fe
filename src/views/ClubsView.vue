@@ -1,6 +1,6 @@
 <template>
   <div class="page">
-    <h1>Клубы</h1>
+    <h1 v-if="!embedded">Клубы</h1>
     <p class="hint">Название из имени файла остаётся техническим идентификатором. Здесь задаётся имя для отображения.</p>
 
     <div v-if="error" class="error">{{ error }}</div>
@@ -31,6 +31,8 @@
 import { onMounted, reactive, ref } from 'vue'
 import { getAdminClubs, updateClub } from '@/api'
 import type { Club } from '@/api'
+
+defineProps<{ embedded?: boolean }>()
 
 const clubs = ref<Club[]>([])
 const edits = reactive<Record<string, { displayName: string }>>({})

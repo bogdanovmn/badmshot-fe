@@ -145,6 +145,8 @@ export interface ArchiveStats {
   matches: number
   sizeMbytes: number
   durationSeconds: number
+  screenshotCount: number
+  screenshotSizeMbytes: number
   years: ArchiveYearStat[]
   clubs: CatalogStat[]
   players: CatalogStat[]
@@ -165,7 +167,10 @@ export interface JobResponse {
   finishedAt: string | null
 }
 
+export type ArchiveJobMode = 'META' | 'SCREENSHOTS'
+
 export interface IndexOptions {
+  mode?: ArchiveJobMode
   screenshotsCount?: number
   marginSeconds?: number
   reduceFactor?: number
@@ -179,6 +184,7 @@ export interface MatchesQuery {
   year?: number
   month?: number
   clubId?: string
+  playerId?: string
   invalid?: boolean
   limit?: number
   offset?: number

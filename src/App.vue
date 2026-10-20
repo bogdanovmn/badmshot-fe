@@ -13,9 +13,6 @@
         </template>
         <template v-if="auth.isAdmin">
           <router-link to="/archive">Архив</router-link>
-          <router-link to="/archive/stats">Статистика</router-link>
-          <router-link to="/players">Игроки</router-link>
-          <router-link to="/clubs">Клубы</router-link>
         </template>
         <template v-if="auth.isAuthenticated">
           <router-link v-if="auth.userName" to="/liked" class="user-name full" :title="auth.userName">{{ auth.userName }}</router-link>

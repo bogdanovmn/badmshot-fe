@@ -1,6 +1,6 @@
 <template>
   <div class="page">
-    <h1>Игроки</h1>
+    <h1 v-if="!embedded">Игроки</h1>
     <p class="hint">Псевдонимы и отображаемые имена. Поиск по имени.</p>
 
     <input v-model="term" class="search" type="text" placeholder="Поиск игрока..." />
@@ -37,6 +37,8 @@
 import { onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { getPlayers, updatePlayer } from '@/api'
 import type { Player } from '@/api'
+
+defineProps<{ embedded?: boolean }>()
 
 const term = ref('')
 const players = ref<Player[]>([])

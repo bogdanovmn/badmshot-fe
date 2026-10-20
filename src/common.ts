@@ -17,6 +17,15 @@ export function formatDurationHuman(totalSeconds: number | null | undefined): st
   return `${minutes} мин`
 }
 
+export function formatElapsed(totalSeconds: number): string {
+  if (totalSeconds <= 0) {
+    return '0 сек'
+  }
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return minutes > 0 ? `${minutes} мин ${seconds} сек` : `${seconds} сек`
+}
+
 export function formatTimecode(totalSeconds: number): string {
   const hours = Math.floor(totalSeconds / 3600)
   const minutes = Math.floor((totalSeconds % 3600) / 60)

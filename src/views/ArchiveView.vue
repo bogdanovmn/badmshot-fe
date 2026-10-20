@@ -3,9 +3,10 @@
     <div class="heading-row">
       <h1>Архив</h1>
       <div class="heading-links">
-        <router-link to="/archive/index-job" class="link-btn">Индексация</router-link>
+        <router-link to="/archive/manage" class="link-btn">Управление</router-link>
         <router-link to="/archive/invalid" class="link-btn">Невалидные</router-link>
         <router-link to="/archive/stats" class="link-btn">Статистика</router-link>
+        <router-link to="/catalog" class="link-btn">Справочники</router-link>
       </div>
     </div>
 
@@ -38,7 +39,13 @@
 
     <section class="matches-section">
       <div class="matches-head">
-        <h2>{{ periodTitle }}</h2>
+        <div class="matches-title">
+          <h2>{{ periodTitle }}</h2>
+          <span v-if="playerId" class="player-filter">
+            Фильтр по игроку
+            <button class="link-btn link-btn--small" @click="clearPlayerFilter">Сбросить</button>
+          </span>
+        </div>
         <button class="link-btn" @click="selectMonth(null, null)">Все матчи</button>
       </div>
 
@@ -111,6 +118,7 @@ const treeError = ref<string | null>(null)
 
 const selectedYear = ref<number | null>(null)
 const selectedMonth = ref<number | null>(null)
+const playerId = ref<string | null>(null)
 const club = ref<Club | null>(null)
 const clubs = ref<Club[]>([])
 
@@ -133,9 +141,28 @@ function isSelected(year: number, month: number): boolean {
 }
 
 function selectMonth(year: number | null, month: number | null) {
-  selectedYear.value = year
-  selectedMonth.value = month
-  router.replace({ query: year ? { year: String(year), ...(month ? { month: String(month) } : {}) } : {} })
+  const query: Record<string, string> = {}
+  if (playerId.value) {
+    query.playerId = playerId.value
+  }
+  if (year) {
+    query.year = String(year)
+    if (month) {
+      query.month = String(month)
+    }
+  }
+  router.replace({ query })
+}
+
+function clearPlayerFilter() {
+  const query: Record<string, string> = {}
+  if (selectedYear.value) {
+    query.year = String(selectedYear.value)
+    if (selectedMonth.value) {
+      query.month = String(selectedMonth.value)
+    }
+  }
+  router.replace({ query })
 }
 
 function pickClubFromSelect(event: Event) {
@@ -163,6 +190,7 @@ async function loadMatches(offset = 0) {
       year: selectedYear.value ?? undefined,
       month: selectedMonth.value ?? undefined,
       clubId: club.value?.id,
+      playerId: playerId.value ?? undefined,
       limit: LIMIT,
       offset
     })
@@ -193,11 +221,16 @@ watch(
   query => {
     const year = query.year ? Number(query.year) : null
     const month = query.month ? Number(query.month) : null
-    if (year !== selectedYear.value || month !== selectedMonth.value) {
-      selectedYear.value = year
-      selectedMonth.value = month
+    const queryPlayerId = typeof query.playerId === 'string' ? query.playerId : null
+    const changed = year !== selectedYear.value
+      || month !== selectedMonth.value
+      || queryPlayerId !== playerId.value
+    selectedYear.value = year
+    selectedMonth.value = month
+    playerId.value = queryPlayerId
+    if (changed) {
+      loadMatches(0)
     }
-    loadMatches(0)
   }
 )
 
@@ -206,9 +239,22 @@ watch(club, () => loadMatches(0))
 onMounted(async () => {
   const year = route.query.year ? Number(route.query.year) : null
   const month = route.query.month ? Number(route.query.month) : null
-  selectedYear.value = year
-  selectedMonth.value = month
-  await Promise.all([loadTree(), loadMatches(0), loadClubs()])
+  playerId.value = typeof route.query.playerId === 'string' ? route.query.playerId : null
+
+  await Promise.all([loadTree(), loadClubs()])
+
+  const latestYear = tree.value[0]
+  const latestMonth = latestYear?.months[0]
+  if (!year && !month && !playerId.value && latestMonth) {
+    selectedYear.value = latestYear.year
+    selectedMonth.value = latestMonth.month
+    await router.replace({ query: { year: String(latestYear.year), month: String(latestMonth.month) } })
+  } else {
+    selectedYear.value = year
+    selectedMonth.value = month
+  }
+
+  await loadMatches(0)
 })
 </script>
 
@@ -343,6 +389,27 @@ h1 {
 
 h2 {
   font-size: 1.15rem;
+}
+
+.matches-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.player-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+
+.link-btn--small {
+  min-height: 28px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.8rem;
 }
 
 .club-filter {

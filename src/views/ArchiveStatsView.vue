@@ -12,6 +12,8 @@
         <div class="card"><span class="value">{{ stats.matches }}</span><span class="caption">матчей</span></div>
         <div class="card"><span class="value">{{ formatBytesHuman(stats.sizeMbytes) }}</span><span class="caption">объём</span></div>
         <div class="card"><span class="value">{{ formatDurationHuman(stats.durationSeconds) }}</span><span class="caption">продолжительность</span></div>
+        <div class="card"><span class="value">{{ stats.screenshotCount }}</span><span class="caption">кадров</span></div>
+        <div class="card"><span class="value">{{ formatBytesHuman(stats.screenshotSizeMbytes) }}</span><span class="caption">объём кадров</span></div>
       </section>
 
       <section>
@@ -64,7 +66,9 @@
           </thead>
           <tbody>
             <tr v-for="player in stats.players" :key="player.id">
-              <td>{{ player.name }}</td>
+              <td>
+                <router-link :to="{ path: '/archive', query: { playerId: player.id } }">{{ player.name }}</router-link>
+              </td>
               <td class="num">{{ player.matches }}</td>
               <td class="num">{{ formatBytesHuman(player.sizeMbytes) }}</td>
               <td class="num">{{ formatDurationHuman(player.durationSeconds) }}</td>
@@ -175,6 +179,15 @@ h2 {
 .stats-table .num {
   text-align: right;
   white-space: nowrap;
+}
+
+.stats-table a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.stats-table a:hover {
+  text-decoration: underline;
 }
 
 .year-row {

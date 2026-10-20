@@ -1,6 +1,6 @@
 import axios from 'axios'
 import type { AxiosError, AxiosResponse } from 'axios'
-import { AuthHttpClient, SsoService } from '@bogdanovmn/ssofw'
+import { AuthHttpClient, SsoService, tokenStorage } from '@bogdanovmn/ssofw'
 import { handleAuthFailure } from '@/logout'
 
 const apiUrl = import.meta.env.VITE_API_URL
@@ -35,6 +35,7 @@ export const makeApiRequest = async <T>(
     const response: AxiosResponse<T> = await axios({
       method,
       url: `${apiUrl}${url}`,
+      headers: tokenStorage.defined() ? tokenStorage.header() : undefined,
       ...(method === 'get' || method === 'delete'
         ? { params }
         : { data: params }

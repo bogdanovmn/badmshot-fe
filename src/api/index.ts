@@ -7,6 +7,8 @@ export interface AppVersion {
 export interface Club {
   id: string
   name: string
+  displayName: string | null
+  displayLabel: string
 }
 
 export interface Player {
@@ -211,7 +213,7 @@ function appendQuery(url: string, params: ScreenshotFilter): string {
 }
 
 export async function getTopScreenshots(): Promise<ScreenshotCard[]> {
-  return authApi.get<ScreenshotCard[]>('/screenshots/top')
+  return makeApiRequest<ScreenshotCard[]>('get', '/screenshots/top')
 }
 
 export async function getLikedScreenshots(): Promise<ScreenshotCard[]> {
@@ -230,7 +232,7 @@ export function screenshotUrl(id: string, width: number): string {
   return `${apiBaseUrl}/screenshots/${id}/crop/${width}`
 }
 
-export async function getClubs(params: { playerId?: string; term?: string } = {}): Promise<Club[]> {
+export async function getClubs(params: { playerId?: string } = {}): Promise<Club[]> {
   return makeApiRequest<Club[]>('get', '/filters/clubs', params)
 }
 
@@ -265,6 +267,14 @@ export async function updatePlayer(
   data: { displayName?: string | null; tournamentAlias?: string | null }
 ): Promise<void> {
   await authApi.put(`/players/${id}`, data)
+}
+
+export async function getAdminClubs(): Promise<Club[]> {
+  return authApi.get<Club[]>('/clubs')
+}
+
+export async function updateClub(id: string, displayName: string | null): Promise<void> {
+  await authApi.put(`/clubs/${id}`, { displayName })
 }
 
 export async function getArchiveTree(): Promise<ArchiveYear[]> {

@@ -41,7 +41,7 @@
           </section>
 
           <section class="filter-block">
-            <label class="filter-label" for="club-search">Клубы</label>
+            <label class="filter-label" for="club-select">Клубы</label>
             <div v-if="selectedClubs.length" class="chips">
               <button
                 v-for="club in selectedClubs"
@@ -50,26 +50,23 @@
                 type="button"
                 @click="removeClub(club.id)"
               >
-                {{ club.name }}<span class="chip-x">×</span>
+                {{ club.displayLabel }}<span class="chip-x">×</span>
               </button>
             </div>
-            <div class="search-wrap">
-              <input
-                id="club-search"
-                v-model="clubTerm"
-                class="search"
-                type="text"
-                placeholder="Начните вводить название клуба..."
-                autocomplete="off"
-              />
-              <span v-if="clubLoading" class="search-status">...</span>
-            </div>
-            <ul v-if="clubTerm && clubOptions.length" class="suggestions">
-              <li v-for="club in clubOptions" :key="club.id">
-                <button type="button" @click="addClub(club)">{{ club.name }}</button>
-              </li>
-            </ul>
-            <p v-else-if="clubTerm && !clubLoading" class="no-results">Ничего не найдено</p>
+            <select
+              id="club-select"
+              class="search"
+              :value="''"
+              :disabled="clubLoading || availableClubs.length === 0"
+              @change="addClubFromSelect"
+            >
+              <option value="" disabled>
+                {{ clubLoading ? 'Загрузка...' : availableClubs.length ? 'Добавить клуб...' : 'Нет доступных клубов' }}
+              </option>
+              <option v-for="club in availableClubs" :key="club.id" :value="club.id">
+                {{ club.displayLabel }}
+              </option>
+            </select>
           </section>
         </div>
 
@@ -83,7 +80,7 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { getClubs, getPlayers } from '@/api'
 import type { Club, Player } from '@/api'
 
@@ -101,14 +98,18 @@ const selectedPlayers = ref<Player[]>([...props.players])
 const selectedClubs = ref<Club[]>([...props.clubs])
 
 const playerTerm = ref('')
-const clubTerm = ref('')
 const playerOptions = ref<Player[]>([])
-const clubOptions = ref<Club[]>([])
 const playerLoading = ref(false)
+const allClubs = ref<Club[]>([])
 const clubLoading = ref(false)
 
+const availableClubs = computed(() =>
+  allClubs.value.filter(
+    option => !selectedClubs.value.some(club => club.id === option.id)
+  )
+)
+
 let playerTimer: ReturnType<typeof setTimeout> | null = null
-let clubTimer: ReturnType<typeof setTimeout> | null = null
 
 async function searchPlayers() {
   if (!playerTerm.value.trim()) {
@@ -128,19 +129,12 @@ async function searchPlayers() {
   }
 }
 
-async function searchClubs() {
-  if (!clubTerm.value.trim()) {
-    clubOptions.value = []
-    return
-  }
+async function loadClubs() {
   clubLoading.value = true
   try {
-    const found = await getClubs({ term: clubTerm.value.trim() })
-    clubOptions.value = found.filter(
-      option => !selectedClubs.value.some(club => club.id === option.id)
-    )
+    allClubs.value = await getClubs()
   } catch {
-    clubOptions.value = []
+    allClubs.value = []
   } finally {
     clubLoading.value = false
   }
@@ -156,10 +150,13 @@ function removePlayer(id: string) {
   selectedPlayers.value = selectedPlayers.value.filter(player => player.id !== id)
 }
 
-function addClub(club: Club) {
-  selectedClubs.value = [...selectedClubs.value, club]
-  clubTerm.value = ''
-  clubOptions.value = []
+function addClubFromSelect(event: Event) {
+  const select = event.target as HTMLSelectElement
+  const club = allClubs.value.find(option => option.id === select.value)
+  select.value = ''
+  if (club) {
+    selectedClubs.value = [...selectedClubs.value, club]
+  }
 }
 
 function removeClub(id: string) {
@@ -170,9 +167,7 @@ function clear() {
   selectedPlayers.value = []
   selectedClubs.value = []
   playerTerm.value = ''
-  clubTerm.value = ''
   playerOptions.value = []
-  clubOptions.value = []
 }
 
 function apply() {
@@ -195,23 +190,16 @@ watch(playerTerm, () => {
   playerTimer = setTimeout(searchPlayers, 350)
 })
 
-watch(clubTerm, () => {
-  if (clubTimer) {
-    clearTimeout(clubTimer)
-  }
-  clubTimer = setTimeout(searchClubs, 350)
-})
-
 onMounted(() => {
   document.addEventListener('keydown', onKeydown)
   document.body.style.overflow = 'hidden'
+  loadClubs()
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', onKeydown)
   document.body.style.overflow = ''
   if (playerTimer) clearTimeout(playerTimer)
-  if (clubTimer) clearTimeout(clubTimer)
 })
 </script>
 
@@ -335,6 +323,11 @@ onBeforeUnmount(() => {
 .search:focus {
   outline: 2px solid var(--text-muted);
   border-color: var(--text-secondary);
+}
+
+.search:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .search-status {

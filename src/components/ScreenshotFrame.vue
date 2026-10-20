@@ -420,10 +420,11 @@ onBeforeUnmount(() => {
 }
 
 .frame--full {
-  width: 100vw;
-  height: calc(100dvh - 64px);
-  margin-left: calc(50% - 50vw);
-  margin-right: calc(50% - 50vw);
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
 }
 
 .image-wrap {
@@ -453,7 +454,7 @@ onBeforeUnmount(() => {
 
 .frame--full .image-wrap img,
 .frame--full .fx-pixel {
-  object-fit: contain;
+  object-fit: cover;
 }
 
 .fx-pixel {
@@ -733,8 +734,8 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 700px) {
-  .frame--full {
-    height: calc(100dvh - 104px);
+  .frame--full .caption {
+    max-width: calc(100% - 6rem);
   }
 }
 </style>

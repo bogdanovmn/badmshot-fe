@@ -1,5 +1,5 @@
 <template>
-  <div id="app">
+  <div id="app" :class="{ 'app--immersive': immersive }">
     <nav class="navbar">
       <div class="nav-brand">
         <router-link to="/">Badm Shot</router-link>
@@ -15,6 +15,7 @@
           <router-link to="/archive">Архив</router-link>
           <router-link to="/archive/stats">Статистика</router-link>
           <router-link to="/players">Игроки</router-link>
+          <router-link to="/clubs">Клубы</router-link>
         </template>
         <template v-if="auth.isAuthenticated">
           <router-link v-if="auth.userName" to="/liked" class="user-name full" :title="auth.userName">{{ auth.userName }}</router-link>
@@ -40,7 +41,7 @@
     <main class="content" :class="{ 'content--immersive': immersive }">
       <router-view />
     </main>
-    <footer class="footer">
+    <footer v-if="!immersive" class="footer">
       <div class="footer-links">
         <router-link to="/faq">FAQ</router-link>
       </div>
@@ -97,8 +98,15 @@ async function handleLogout() {
   min-height: 100vh;
 }
 
+.app--immersive {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .navbar {
   display: flex;
+  flex: 0 0 auto;
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem 1rem;
@@ -177,9 +185,19 @@ async function handleLogout() {
 }
 
 .content--immersive {
+  display: flex;
+  flex: 1;
   max-width: none;
+  min-height: 0;
   margin: 0;
   padding: 0;
+  overflow: hidden;
+}
+
+.content--immersive > * {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
 }
 
 .footer {

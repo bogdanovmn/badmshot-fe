@@ -43,17 +43,13 @@
       </div>
 
       <div class="club-filter">
-        <div v-if="club" class="chips">
-          <button class="chip" @click="clearClub">
-            {{ club.name }}<span class="chip-x">×</span>
-          </button>
-        </div>
-        <input v-model="clubTerm" class="search" type="text" placeholder="Фильтр по клубу..." />
-        <div v-if="clubOptions.length" class="options">
-          <button v-for="option in clubOptions" :key="option.id" class="option" @click="pickClub(option)">
-            {{ option.name }}
-          </button>
-        </div>
+        <label class="filter-label" for="archive-club">Клуб</label>
+        <select id="archive-club" class="search" :value="club?.id ?? ''" @change="pickClubFromSelect">
+          <option value="">Все клубы</option>
+          <option v-for="option in clubs" :key="option.id" :value="option.id">
+            {{ option.displayLabel }}
+          </option>
+        </select>
       </div>
 
       <div v-if="matchesError" class="error">{{ matchesError }}</div>
@@ -98,7 +94,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getArchiveTree, getClubs, getMatches } from '@/api'
 import type { ArchiveYear, Club, MatchPage } from '@/api'
@@ -116,10 +112,7 @@ const treeError = ref<string | null>(null)
 const selectedYear = ref<number | null>(null)
 const selectedMonth = ref<number | null>(null)
 const club = ref<Club | null>(null)
-
-const clubTerm = ref('')
-const clubOptions = ref<Club[]>([])
-let clubTimer: ReturnType<typeof setTimeout> | null = null
+const clubs = ref<Club[]>([])
 
 const page = ref<MatchPage>({ total: 0, items: [] })
 const matchesLoading = ref(false)
@@ -145,14 +138,9 @@ function selectMonth(year: number | null, month: number | null) {
   router.replace({ query: year ? { year: String(year), ...(month ? { month: String(month) } : {}) } : {} })
 }
 
-function pickClub(option: Club) {
-  club.value = option
-  clubTerm.value = ''
-  clubOptions.value = []
-}
-
-function clearClub() {
-  club.value = null
+function pickClubFromSelect(event: Event) {
+  const select = event.target as HTMLSelectElement
+  club.value = clubs.value.find(option => option.id === select.value) ?? null
 }
 
 async function loadTree() {
@@ -192,20 +180,13 @@ function loadMore() {
   loadMatches(page.value.items.length)
 }
 
-async function loadClubOptions() {
+async function loadClubs() {
   try {
-    clubOptions.value = await getClubs({ term: clubTerm.value || undefined })
+    clubs.value = await getClubs()
   } catch {
-    clubOptions.value = []
+    clubs.value = []
   }
 }
-
-watch(clubTerm, () => {
-  if (clubTimer) {
-    clearTimeout(clubTimer)
-  }
-  clubTimer = setTimeout(loadClubOptions, 300)
-})
 
 watch(
   () => route.query,
@@ -227,13 +208,7 @@ onMounted(async () => {
   const month = route.query.month ? Number(route.query.month) : null
   selectedYear.value = year
   selectedMonth.value = month
-  await Promise.all([loadTree(), loadMatches(0)])
-})
-
-onBeforeUnmount(() => {
-  if (clubTimer) {
-    clearTimeout(clubTimer)
-  }
+  await Promise.all([loadTree(), loadMatches(0), loadClubs()])
 })
 </script>
 
@@ -373,35 +348,12 @@ h2 {
 .club-filter {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-}
-
-.chips {
-  display: flex;
-  flex-wrap: wrap;
   gap: 0.35rem;
 }
 
-.chip,
-.option {
-  border-radius: 14px;
-  cursor: pointer;
-  font-size: 0.85rem;
-}
-
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.25rem 0.6rem;
-  border: none;
-  background: var(--color-primary);
-  color: var(--color-on-primary);
-}
-
-.chip-x {
-  font-size: 1rem;
-  line-height: 1;
+.filter-label {
+  font-weight: 600;
+  font-size: 0.9rem;
 }
 
 .search {
@@ -413,24 +365,7 @@ h2 {
   border-radius: 6px;
   background: var(--color-bg);
   color: var(--color-text);
-}
-
-.options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-
-.option {
-  padding: 0.3rem 0.6rem;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg);
-  color: var(--color-text);
-}
-
-.option:hover {
-  background: var(--color-primary-soft);
-  border-color: var(--color-primary);
+  cursor: pointer;
 }
 
 .match-list {

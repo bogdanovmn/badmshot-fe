@@ -3,7 +3,12 @@
     <div class="heading">
       <h1>Облако тэгов</h1>
       <p class="hint">
-        Размер тэга — количество матчей. Нажмите на тэг, чтобы открыть кадры с этим игроком или клубом.
+        <template v-if="auth.isAuthenticated">
+          Размер тэга — количество матчей. Нажмите на тэг, чтобы открыть кадры с этим игроком или клубом.
+        </template>
+        <template v-else>
+          Размер тэга — количество матчей. Войдите в систему, чтобы открыть кадры по тэгу.
+        </template>
       </p>
     </div>
 
@@ -19,6 +24,7 @@
             :key="tag.id"
             class="tag"
             type="button"
+            :disabled="!auth.isAuthenticated"
             :style="tagStyle(tag, playerMax)"
             :title="`${tag.label} — матчей: ${tag.matches}`"
             @click="open('players', tag)"
@@ -36,6 +42,7 @@
             :key="tag.id"
             class="tag"
             type="button"
+            :disabled="!auth.isAuthenticated"
             :style="tagStyle(tag, clubMax)"
             :title="`${tag.label} — матчей: ${tag.matches}`"
             @click="open('clubs', tag)"
@@ -56,8 +63,10 @@ import type { CSSProperties } from 'vue'
 import { useRouter } from 'vue-router'
 import { getClubTags, getPlayerTags } from '@/api'
 import type { CatalogTag } from '@/api'
+import { authStore } from '@/stores/auth'
 
 const router = useRouter()
+const auth = authStore()
 const playerTags = ref<CatalogTag[]>([])
 const clubTags = ref<CatalogTag[]>([])
 const loading = ref(true)
@@ -75,7 +84,14 @@ function tagStyle(tag: CatalogTag, max: number): CSSProperties {
 }
 
 function open(kind: 'players' | 'clubs', tag: CatalogTag) {
+  if (!auth.isAuthenticated) {
+    return
+  }
   router.push({ path: '/explore', query: { [kind]: tag.id } })
+}
+
+function sorted(tags: CatalogTag[]): CatalogTag[] {
+  return [...tags].sort((left, right) => left.label.localeCompare(right.label, 'ru'))
 }
 
 async function load() {
@@ -83,8 +99,8 @@ async function load() {
   error.value = null
   try {
     const [players, clubs] = await Promise.all([getPlayerTags(), getClubTags()])
-    playerTags.value = players
-    clubTags.value = clubs
+    playerTags.value = sorted(players)
+    clubTags.value = sorted(clubs)
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Не удалось загрузить тэги'
   } finally {
@@ -92,7 +108,10 @@ async function load() {
   }
 }
 
-onMounted(load)
+onMounted(() => {
+  auth.update()
+  load()
+})
 </script>
 
 <style scoped>
@@ -155,9 +174,13 @@ onMounted(load)
   transition: color 0.15s, background-color 0.15s;
 }
 
-.tag:hover {
+.tag:hover:not(:disabled) {
   color: var(--color-primary-hover);
   background: var(--color-primary-soft);
+}
+
+.tag:disabled {
+  cursor: default;
 }
 
 .tag-count {

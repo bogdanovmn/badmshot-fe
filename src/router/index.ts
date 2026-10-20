@@ -30,6 +30,7 @@ const router = createRouter({
     { path: '/archive/stats', component: () => import('@/views/ArchiveStatsView.vue'), meta: { allow: Role.admin } },
     { path: '/archive/matches/:id', component: () => import('@/views/ArchiveMatchView.vue'), meta: { allow: Role.admin }, props: true },
     { path: '/players', component: () => import('@/views/PlayersView.vue'), meta: { allow: Role.admin } },
+    { path: '/clubs', component: () => import('@/views/ClubsView.vue'), meta: { allow: Role.admin } },
   ]
 })
 

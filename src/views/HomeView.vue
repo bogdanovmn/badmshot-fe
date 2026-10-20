@@ -132,15 +132,20 @@ onMounted(() => {
 <style scoped>
 .home {
   position: relative;
+  display: flex;
+  flex-direction: column;
   width: 100%;
+  height: 100%;
+  min-height: 0;
 }
 
 .stage {
   display: flex;
+  flex: 1;
   align-items: center;
   justify-content: center;
   width: 100%;
-  height: calc(100dvh - 64px);
+  min-height: 0;
   background: var(--image-bg);
 }
 
@@ -242,10 +247,6 @@ onMounted(() => {
 }
 
 @media (max-width: 700px) {
-  .stage {
-    height: calc(100dvh - 104px);
-  }
-
   .slider-btn {
     width: 48px;
     height: 48px;

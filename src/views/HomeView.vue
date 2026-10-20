@@ -14,7 +14,9 @@
     <template v-else-if="card">
       <ScreenshotFrame
         :card="card"
-        :width="1280"
+        :width="1920"
+        full
+        effects
         :actionable="auth.isAuthenticated"
         :busy="busy"
         @toggle-like="toggleLike"
@@ -41,8 +43,12 @@ let timer: ReturnType<typeof setInterval> | null = null
 
 async function load() {
   error.value = null
+  const current = card.value
   try {
-    card.value = await getRandomScreenshot()
+    card.value = await getRandomScreenshot({
+      excludeMatchId: current?.matchId,
+      excludeClubId: current?.clubId || undefined
+    })
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Не удалось загрузить кадр'
   }
@@ -92,12 +98,12 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  max-width: 900px;
-  margin: 0 auto;
 }
 
 .intro {
   text-align: center;
+  max-width: 900px;
+  margin: 0 auto;
 }
 
 h1 {

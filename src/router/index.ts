@@ -10,6 +10,7 @@ const router = createRouter({
   routes: [
     { path: '/', component: HomeView },
     { path: '/top', component: () => import('@/views/TopView.vue') },
+    { path: '/tags', component: () => import('@/views/TagsView.vue') },
     { path: '/explore', component: () => import('@/views/ExploreView.vue'), meta: { private: true } },
     { path: '/liked', component: () => import('@/views/LikedView.vue'), meta: { private: true } },
     { path: '/faq', component: () => import('@/views/FaqView.vue') },

@@ -1,160 +1,146 @@
 <template>
   <div class="explore">
-    <div class="heading">
-      <h1>Кадры</h1>
-      <p class="hint">Выберите игроков и/или клубы, затем листайте кадры.</p>
-    </div>
+    <div class="toolbar">
+      <button class="filter-btn" type="button" @click="filterOpen = true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+        </svg>
+        <span class="filter-btn-label">Фильтры</span>
+        <span v-if="selectedCount" class="filter-count">{{ selectedCount }}</span>
+      </button>
 
-    <section class="filters">
-      <div class="filter-block">
-        <label class="filter-label">Игроки</label>
-        <div v-if="selectedPlayers.length" class="chips">
-          <button
-            v-for="player in selectedPlayers"
-            :key="player.id"
-            class="chip"
-            @click="removePlayer(player.id)"
-          >
-            {{ player.displayLabel }}<span class="chip-x">×</span>
-          </button>
-        </div>
-        <input v-model="playerTerm" class="search" type="text" placeholder="Поиск игрока..." />
-        <div class="options">
-          <button
-            v-for="player in availablePlayers"
-            :key="player.id"
-            class="option"
-            @click="addPlayer(player)"
-          >
-            {{ player.displayLabel }}
-          </button>
-        </div>
+      <div v-if="selectedPlayers.length || selectedClubs.length" class="active-filters">
+        <button
+          v-for="player in selectedPlayers"
+          :key="player.id"
+          class="chip"
+          type="button"
+          @click="removePlayer(player.id)"
+        >
+          {{ player.displayLabel }}<span class="chip-x">×</span>
+        </button>
+        <button
+          v-for="club in selectedClubs"
+          :key="club.id"
+          class="chip"
+          type="button"
+          @click="removeClub(club.id)"
+        >
+          {{ club.name }}<span class="chip-x">×</span>
+        </button>
       </div>
 
-      <div class="filter-block">
-        <label class="filter-label">Клубы</label>
-        <div v-if="selectedClubs.length" class="chips">
-          <button
-            v-for="club in selectedClubs"
-            :key="club.id"
-            class="chip"
-            @click="removeClub(club.id)"
-          >
-            {{ club.name }}<span class="chip-x">×</span>
-          </button>
-        </div>
-        <input v-model="clubTerm" class="search" type="text" placeholder="Поиск клуба..." />
-        <div class="options">
-          <button
-            v-for="club in availableClubs"
-            :key="club.id"
-            class="option"
-            @click="addClub(club)"
-          >
-            {{ club.name }}
-          </button>
-        </div>
-      </div>
-    </section>
-
-    <div class="actions">
-      <button class="btn-primary" :disabled="loading" @click="next">
+      <button class="btn-primary" :disabled="loading" type="button" @click="next">
         {{ loading ? 'Загрузка...' : 'Следующий кадр' }}
       </button>
-      <span v-if="notice" class="notice">{{ notice }}</span>
     </div>
 
+    <span v-if="notice" class="notice">{{ notice }}</span>
     <div v-if="error" class="error">{{ error }}</div>
 
-    <div v-if="!card && !error" class="empty">Нажмите «Следующий кадр», чтобы начать.</div>
+    <div v-if="!card && loading" class="empty">Загрузка кадра...</div>
+    <div v-else-if="!card && !error" class="empty">Нажмите «Следующий кадр», чтобы начать.</div>
 
     <ScreenshotFrame
       v-else-if="card"
       :card="card"
-      :width="1280"
+      :width="1920"
+      full
+      effects
       actionable
       :busy="liking"
       @toggle-like="toggleLike"
+    />
+
+    <ScreenshotFilterDialog
+      v-if="filterOpen"
+      :players="selectedPlayers"
+      :clubs="selectedClubs"
+      @close="filterOpen = false"
+      @apply="applyFilters"
     />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
-  getClubs,
+  getClubsByIds,
   getNextScreenshot,
-  getPlayers,
+  getPlayersByIds,
   isRateLimited,
   likeScreenshot,
   unlikeScreenshot
 } from '@/api'
-import type { Club, Player, ScreenshotCard } from '@/api'
+import type { Club, Player, ScreenshotCard, ScreenshotFilter } from '@/api'
 import ScreenshotFrame from '@/components/ScreenshotFrame.vue'
+import ScreenshotFilterDialog from '@/components/ScreenshotFilterDialog.vue'
+
+const route = useRoute()
+const router = useRouter()
 
 const selectedPlayers = ref<Player[]>([])
 const selectedClubs = ref<Club[]>([])
 
-const playerTerm = ref('')
-const clubTerm = ref('')
-const playerOptions = ref<Player[]>([])
-const clubOptions = ref<Club[]>([])
-
 const card = ref<ScreenshotCard | null>(null)
 const loading = ref(false)
 const liking = ref(false)
+const filterOpen = ref(false)
 const error = ref<string | null>(null)
 const notice = ref<string | null>(null)
 
-let playerTimer: ReturnType<typeof setTimeout> | null = null
-let clubTimer: ReturnType<typeof setTimeout> | null = null
 let noticeTimer: ReturnType<typeof setTimeout> | null = null
 
-const availablePlayers = computed(() =>
-  playerOptions.value.filter(option => !selectedPlayers.value.some(p => p.id === option.id))
-)
-const availableClubs = computed(() =>
-  clubOptions.value.filter(option => !selectedClubs.value.some(c => c.id === option.id))
-)
+const selectedCount = computed(() => selectedPlayers.value.length + selectedClubs.value.length)
 
-async function loadPlayerOptions() {
+function queryValues(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === 'string')
+  }
+  return typeof value === 'string' ? [value] : []
+}
+
+function sameSelection(playerIds: string[], clubIds: string[]): boolean {
+  const currentPlayers = selectedPlayers.value.map(player => player.id).sort()
+  const currentClubs = selectedClubs.value.map(club => club.id).sort()
+  return currentPlayers.join(',') === [...playerIds].sort().join(',')
+    && currentClubs.join(',') === [...clubIds].sort().join(',')
+}
+
+async function loadSelection(playerIds: string[], clubIds: string[]) {
   try {
-    playerOptions.value = await getPlayers({ term: playerTerm.value || undefined })
+    const [players, clubs] = await Promise.all([
+      getPlayersByIds(playerIds),
+      getClubsByIds(clubIds)
+    ])
+    selectedPlayers.value = players
+    selectedClubs.value = clubs
   } catch {
-    playerOptions.value = []
+    selectedPlayers.value = []
+    selectedClubs.value = []
   }
 }
 
-async function loadClubOptions() {
-  try {
-    clubOptions.value = await getClubs({ term: clubTerm.value || undefined })
-  } catch {
-    clubOptions.value = []
+async function syncQuery() {
+  const query: Record<string, string | string[]> = {}
+  if (selectedPlayers.value.length) {
+    query.players = selectedPlayers.value.map(player => player.id)
+  }
+  if (selectedClubs.value.length) {
+    query.clubs = selectedClubs.value.map(club => club.id)
+  }
+  const current = route.query
+  const same = JSON.stringify(normalizeQuery(current)) === JSON.stringify(normalizeQuery(query))
+  if (!same) {
+    await router.replace({ path: '/explore', query })
   }
 }
 
-function addPlayer(player: Player) {
-  selectedPlayers.value = [...selectedPlayers.value, player]
-  playerTerm.value = ''
-}
-
-function removePlayer(id: string) {
-  selectedPlayers.value = selectedPlayers.value.filter(player => player.id !== id)
-}
-
-function addClub(club: Club) {
-  selectedClubs.value = [...selectedClubs.value, club]
-  clubTerm.value = ''
-}
-
-function removeClub(id: string) {
-  selectedClubs.value = selectedClubs.value.filter(club => club.id !== id)
-}
-
-function filter() {
+function normalizeQuery(query: Record<string, unknown>): Record<string, string[]> {
   return {
-    players: selectedPlayers.value.map(player => player.id),
-    clubs: selectedClubs.value.map(club => club.id)
+    players: queryValues(query.players).slice().sort(),
+    clubs: queryValues(query.clubs).slice().sort()
   }
 }
 
@@ -166,6 +152,16 @@ function showNotice(message: string) {
   noticeTimer = setTimeout(() => {
     notice.value = null
   }, 4000)
+}
+
+function filter(): ScreenshotFilter {
+  const current = card.value
+  return {
+    players: selectedPlayers.value.map(player => player.id),
+    clubs: selectedClubs.value.map(club => club.id),
+    excludeMatchId: current?.matchId,
+    excludeClubId: current?.clubId || undefined
+  }
 }
 
 async function next() {
@@ -185,6 +181,26 @@ async function next() {
   } finally {
     loading.value = false
   }
+}
+
+async function applyFilters(value: { players: Player[]; clubs: Club[] }) {
+  selectedPlayers.value = value.players
+  selectedClubs.value = value.clubs
+  filterOpen.value = false
+  await syncQuery()
+  await next()
+}
+
+async function removePlayer(id: string) {
+  selectedPlayers.value = selectedPlayers.value.filter(player => player.id !== id)
+  await syncQuery()
+  await next()
+}
+
+async function removeClub(id: string) {
+  selectedClubs.value = selectedClubs.value.filter(club => club.id !== id)
+  await syncQuery()
+  await next()
 }
 
 async function toggleLike() {
@@ -213,29 +229,35 @@ async function toggleLike() {
   }
 }
 
-watch(playerTerm, () => {
-  if (playerTimer) {
-    clearTimeout(playerTimer)
+watch(
+  () => route.fullPath,
+  async () => {
+    if (route.path !== '/explore') {
+      return
+    }
+    const playerIds = queryValues(route.query.players)
+    const clubIds = queryValues(route.query.clubs)
+    if (sameSelection(playerIds, clubIds)) {
+      return
+    }
+    await loadSelection(playerIds, clubIds)
+    await next()
   }
-  playerTimer = setTimeout(loadPlayerOptions, 300)
-})
-
-watch(clubTerm, () => {
-  if (clubTimer) {
-    clearTimeout(clubTimer)
-  }
-  clubTimer = setTimeout(loadClubOptions, 300)
-})
+)
 
 onMounted(async () => {
-  await Promise.all([loadPlayerOptions(), loadClubOptions()])
+  const playerIds = queryValues(route.query.players)
+  const clubIds = queryValues(route.query.clubs)
+  if (playerIds.length || clubIds.length) {
+    await loadSelection(playerIds, clubIds)
+  }
   await next()
 })
 
 onBeforeUnmount(() => {
-  if (playerTimer) clearTimeout(playerTimer)
-  if (clubTimer) clearTimeout(clubTimer)
-  if (noticeTimer) clearTimeout(noticeTimer)
+  if (noticeTimer) {
+    clearTimeout(noticeTimer)
+  }
 })
 </script>
 
@@ -243,51 +265,62 @@ onBeforeUnmount(() => {
 .explore {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-  max-width: 900px;
-  margin: 0 auto;
-}
-
-.heading h1 {
-  font-size: 1.5rem;
-}
-
-.hint {
-  color: var(--color-muted);
-  font-size: 0.9rem;
-}
-
-.filters {
-  display: grid;
-  grid-template-columns: 1fr;
   gap: 1rem;
 }
 
-@media (min-width: 720px) {
-  .filters {
-    grid-template-columns: 1fr 1fr;
-  }
+.toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
 }
 
-.filter-block {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  padding: 0.75rem;
+.filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 44px;
+  padding: 0.5rem 1rem;
   border: 1px solid var(--color-border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--color-surface);
-}
-
-.filter-label {
+  color: var(--color-primary);
   font-weight: 600;
-  font-size: 0.9rem;
+  cursor: pointer;
 }
 
-.chips {
+.filter-btn:hover {
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary);
+}
+
+.filter-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.filter-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 0.3rem;
+  border-radius: 11px;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: 0.75rem;
+}
+
+.active-filters {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: 0.35rem;
+  flex: 1;
 }
 
 .chip {
@@ -299,7 +332,7 @@ onBeforeUnmount(() => {
   border-radius: 14px;
   background: var(--color-primary);
   color: var(--color-on-primary);
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   cursor: pointer;
 }
 
@@ -308,55 +341,16 @@ onBeforeUnmount(() => {
   line-height: 1;
 }
 
-.search {
-  width: 100%;
-  min-height: 40px;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background: var(--color-bg);
-  color: var(--color-text);
-}
-
-.options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  max-height: 140px;
-  overflow-y: auto;
-}
-
-.option {
-  padding: 0.3rem 0.6rem;
-  border: 1px solid var(--color-border);
-  border-radius: 14px;
-  background: var(--color-bg);
-  color: var(--color-text);
-  font-size: 0.85rem;
-  cursor: pointer;
-}
-
-.option:hover {
-  background: var(--color-primary-soft);
-  border-color: var(--color-primary);
-}
-
-.actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
 .btn-primary {
   min-height: 44px;
   padding: 0.6rem 1.5rem;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--color-primary);
   color: var(--color-on-primary);
   font-weight: 600;
   cursor: pointer;
+  margin-left: auto;
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -368,20 +362,27 @@ onBeforeUnmount(() => {
   cursor: default;
 }
 
-.notice {
-  color: var(--color-danger);
+.notice,
+.error {
+  text-align: center;
   font-size: 0.9rem;
+  color: var(--color-danger);
 }
 
-.loading,
-.empty,
-.error {
+.empty {
   text-align: center;
   padding: 2rem 1rem;
   color: var(--color-muted);
 }
 
-.error {
-  color: var(--color-danger);
+@media (max-width: 599px) {
+  .filter-btn-label {
+    display: none;
+  }
+
+  .btn-primary {
+    width: 100%;
+    margin-left: 0;
+  }
 }
 </style>

@@ -39,6 +39,14 @@ export interface ScreenshotCard {
 export interface ScreenshotFilter {
   players?: string[]
   clubs?: string[]
+  excludeMatchId?: string
+  excludeClubId?: string
+}
+
+export interface CatalogTag {
+  id: string
+  label: string
+  matches: number
 }
 
 export interface Screenshot {
@@ -228,6 +236,28 @@ export async function getClubs(params: { playerId?: string; term?: string } = {}
 
 export async function getPlayers(params: { clubId?: string; term?: string } = {}): Promise<Player[]> {
   return makeApiRequest<Player[]>('get', '/filters/players', params)
+}
+
+export async function getPlayersByIds(ids: string[]): Promise<Player[]> {
+  if (ids.length === 0) {
+    return []
+  }
+  return makeApiRequest<Player[]>('get', '/filters/players/by-ids', { ids })
+}
+
+export async function getClubsByIds(ids: string[]): Promise<Club[]> {
+  if (ids.length === 0) {
+    return []
+  }
+  return makeApiRequest<Club[]>('get', '/filters/clubs/by-ids', { ids })
+}
+
+export async function getPlayerTags(): Promise<CatalogTag[]> {
+  return makeApiRequest<CatalogTag[]>('get', '/tags/players')
+}
+
+export async function getClubTags(): Promise<CatalogTag[]> {
+  return makeApiRequest<CatalogTag[]>('get', '/tags/clubs')
 }
 
 export async function updatePlayer(

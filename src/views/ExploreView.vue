@@ -1,48 +1,7 @@
 <template>
   <div class="explore">
-    <div class="toolbar">
-      <button class="filter-btn" type="button" @click="filterOpen = true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-        </svg>
-        <span class="filter-btn-label">Фильтры</span>
-        <span v-if="selectedCount" class="filter-count">{{ selectedCount }}</span>
-      </button>
-
-      <div v-if="selectedPlayers.length || selectedClubs.length" class="active-filters">
-        <button
-          v-for="player in selectedPlayers"
-          :key="player.id"
-          class="chip"
-          type="button"
-          @click="removePlayer(player.id)"
-        >
-          {{ player.displayLabel }}<span class="chip-x">×</span>
-        </button>
-        <button
-          v-for="club in selectedClubs"
-          :key="club.id"
-          class="chip"
-          type="button"
-          @click="removeClub(club.id)"
-        >
-          {{ club.name }}<span class="chip-x">×</span>
-        </button>
-      </div>
-
-      <button class="btn-primary" :disabled="loading" type="button" @click="next">
-        {{ loading ? 'Загрузка...' : 'Следующий кадр' }}
-      </button>
-    </div>
-
-    <span v-if="notice" class="notice">{{ notice }}</span>
-    <div v-if="error" class="error">{{ error }}</div>
-
-    <div v-if="!card && loading" class="empty">Загрузка кадра...</div>
-    <div v-else-if="!card && !error" class="empty">Нажмите «Следующий кадр», чтобы начать.</div>
-
     <ScreenshotFrame
-      v-else-if="card"
+      v-if="card"
       :card="card"
       :width="1920"
       full
@@ -50,7 +9,70 @@
       actionable
       :busy="liking"
       @toggle-like="toggleLike"
-    />
+    >
+      <template #overlay>
+        <button
+          class="overlay-icon filter-btn"
+          :class="{ active: hasFilters }"
+          type="button"
+          title="Фильтры"
+          aria-label="Фильтры"
+          @click="filterOpen = true"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+          </svg>
+          <span v-if="hasFilters" class="filter-dot" aria-hidden="true"></span>
+        </button>
+
+        <button
+          class="slider-btn prev"
+          type="button"
+          :disabled="!canPrev"
+          title="Предыдущий кадр"
+          aria-label="Предыдущий кадр"
+          @click="prev"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
+
+        <button
+          class="slider-btn next"
+          type="button"
+          :disabled="loading"
+          title="Следующий кадр"
+          aria-label="Следующий кадр"
+          @click="next"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </button>
+      </template>
+    </ScreenshotFrame>
+
+    <div v-else class="stage">
+      <div v-if="loading" class="stage-text">Загрузка кадра...</div>
+      <div v-else-if="error" class="stage-text stage-error">{{ error }}</div>
+      <button v-else class="stage-cta" type="button" @click="next">Показать кадр</button>
+      <button
+        class="overlay-icon filter-btn stage-filter"
+        :class="{ active: hasFilters }"
+        type="button"
+        title="Фильтры"
+        aria-label="Фильтры"
+        @click="filterOpen = true"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+        </svg>
+        <span v-if="hasFilters" class="filter-dot" aria-hidden="true"></span>
+      </button>
+    </div>
+
+    <div v-if="notice || (error && card)" class="toast">{{ notice || error }}</div>
 
     <ScreenshotFilterDialog
       v-if="filterOpen"
@@ -83,7 +105,8 @@ const router = useRouter()
 const selectedPlayers = ref<Player[]>([])
 const selectedClubs = ref<Club[]>([])
 
-const card = ref<ScreenshotCard | null>(null)
+const history = ref<ScreenshotCard[]>([])
+const historyIndex = ref(-1)
 const loading = ref(false)
 const liking = ref(false)
 const filterOpen = ref(false)
@@ -92,7 +115,10 @@ const notice = ref<string | null>(null)
 
 let noticeTimer: ReturnType<typeof setTimeout> | null = null
 
+const card = computed<ScreenshotCard | null>(() => history.value[historyIndex.value] ?? null)
+const canPrev = computed(() => historyIndex.value > 0)
 const selectedCount = computed(() => selectedPlayers.value.length + selectedClubs.value.length)
+const hasFilters = computed(() => selectedCount.value > 0)
 
 function queryValues(value: unknown): string[] {
   if (Array.isArray(value)) {
@@ -168,10 +194,16 @@ async function next() {
   if (loading.value) {
     return
   }
+  if (historyIndex.value < history.value.length - 1) {
+    historyIndex.value++
+    return
+  }
   loading.value = true
   error.value = null
   try {
-    card.value = await getNextScreenshot(filter())
+    const nextCard = await getNextScreenshot(filter())
+    history.value = [...history.value, nextCard]
+    historyIndex.value = history.value.length - 1
   } catch (e) {
     if (isRateLimited(e)) {
       showNotice('Слишком часто. Подождите несколько секунд.')
@@ -183,22 +215,18 @@ async function next() {
   }
 }
 
+function prev() {
+  if (historyIndex.value > 0) {
+    historyIndex.value--
+  }
+}
+
 async function applyFilters(value: { players: Player[]; clubs: Club[] }) {
   selectedPlayers.value = value.players
   selectedClubs.value = value.clubs
   filterOpen.value = false
-  await syncQuery()
-  await next()
-}
-
-async function removePlayer(id: string) {
-  selectedPlayers.value = selectedPlayers.value.filter(player => player.id !== id)
-  await syncQuery()
-  await next()
-}
-
-async function removeClub(id: string) {
-  selectedClubs.value = selectedClubs.value.filter(club => club.id !== id)
+  history.value = []
+  historyIndex.value = -1
   await syncQuery()
   await next()
 }
@@ -209,8 +237,9 @@ async function toggleLike() {
   }
   liking.value = true
   const current = card.value
+  const index = historyIndex.value
   const nextLiked = !current.liked
-  card.value = {
+  history.value[index] = {
     ...current,
     liked: nextLiked,
     likes: current.likes + (nextLiked ? 1 : -1)
@@ -222,7 +251,7 @@ async function toggleLike() {
       await unlikeScreenshot(current.id)
     }
   } catch (e) {
-    card.value = current
+    history.value[index] = current
     error.value = e instanceof Error ? e.message : 'Не удалось изменить лайк'
   } finally {
     liking.value = false
@@ -241,6 +270,8 @@ watch(
       return
     }
     await loadSelection(playerIds, clubIds)
+    history.value = []
+    historyIndex.value = -1
     await next()
   }
 )
@@ -263,126 +294,190 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .explore {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.toolbar {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-  max-width: 1200px;
-  margin: 0 auto;
+  position: relative;
   width: 100%;
 }
 
-.filter-btn {
-  display: inline-flex;
+.stage {
+  position: relative;
+  display: flex;
   align-items: center;
-  gap: 0.45rem;
+  justify-content: center;
+  width: 100%;
+  height: calc(100dvh - 64px);
+  background: var(--image-bg);
+}
+
+.stage-text {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+.stage-error {
+  color: var(--color-danger);
+  padding: 0 1rem;
+  text-align: center;
+}
+
+.stage-cta {
   min-height: 44px;
-  padding: 0.5rem 1rem;
-  border: 1px solid var(--color-border);
+  padding: 0.6rem 1.5rem;
+  border: 1px solid var(--btn-ghost-border);
   border-radius: 8px;
-  background: var(--color-surface);
-  color: var(--color-primary);
+  background: transparent;
+  color: var(--text-primary);
   font-weight: 600;
   cursor: pointer;
 }
 
-.filter-btn:hover {
-  background: var(--color-primary-soft);
-  border-color: var(--color-primary);
+.stage-cta:hover {
+  background: var(--text-primary);
+  color: var(--accent-dark);
 }
 
-.filter-btn svg {
-  width: 18px;
-  height: 18px;
-}
-
-.filter-count {
+.overlay-icon {
+  position: absolute;
+  z-index: 4;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 22px;
-  height: 22px;
-  padding: 0 0.3rem;
-  border-radius: 11px;
-  background: var(--color-primary);
-  color: var(--color-on-primary);
-  font-size: 0.75rem;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--overlay-divider);
+  border-radius: 50%;
+  background: var(--overlay-panel);
+  color: var(--text-primary);
+  cursor: pointer;
+  backdrop-filter: blur(6px);
 }
 
-.active-filters {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  flex: 1;
+.overlay-icon:hover,
+.overlay-icon.active {
+  background: var(--text-primary);
+  color: var(--accent-dark);
 }
 
-.chip {
+.overlay-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.filter-btn {
+  top: 0.75rem;
+  left: 0.75rem;
+}
+
+.filter-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  box-shadow: 0 0 0 2px var(--accent-dark);
+}
+
+.overlay-icon.active .filter-dot {
+  background: var(--accent-dark);
+  box-shadow: 0 0 0 2px var(--text-primary);
+}
+
+.stage-filter {
+  top: 0.75rem;
+  left: 0.75rem;
+}
+
+.slider-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 4;
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  padding: 0.25rem 0.6rem;
-  border: none;
-  border-radius: 14px;
-  background: var(--color-primary);
-  color: var(--color-on-primary);
-  font-size: 0.82rem;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border: 1px solid var(--overlay-divider);
+  border-radius: 50%;
+  background: var(--overlay-panel);
+  color: var(--text-primary);
   cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: background-color 0.2s, color 0.2s, opacity 0.2s;
 }
 
-.chip-x {
-  font-size: 1rem;
-  line-height: 1;
+.slider-btn:hover:not(:disabled) {
+  background: var(--text-primary);
+  color: var(--accent-dark);
 }
 
-.btn-primary {
-  min-height: 44px;
-  padding: 0.6rem 1.5rem;
-  border: none;
-  border-radius: 8px;
-  background: var(--color-primary);
-  color: var(--color-on-primary);
-  font-weight: 600;
-  cursor: pointer;
-  margin-left: auto;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--color-primary-hover);
-}
-
-.btn-primary:disabled {
-  opacity: 0.6;
+.slider-btn:disabled {
+  opacity: 0.3;
   cursor: default;
 }
 
-.notice,
-.error {
+.slider-btn svg {
+  width: 28px;
+  height: 28px;
+}
+
+.slider-btn.prev {
+  left: 0.75rem;
+}
+
+.slider-btn.next {
+  right: 0.75rem;
+}
+
+.toast {
+  position: fixed;
+  top: 5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  max-width: min(90vw, 420px);
+  padding: 0.6rem 1rem;
+  border: 1px solid var(--overlay-divider);
+  border-radius: 8px;
+  background: var(--overlay-panel);
+  color: var(--text-primary);
   text-align: center;
   font-size: 0.9rem;
-  color: var(--color-danger);
+  backdrop-filter: blur(8px);
 }
 
-.empty {
-  text-align: center;
-  padding: 2rem 1rem;
-  color: var(--color-muted);
-}
-
-@media (max-width: 599px) {
-  .filter-btn-label {
-    display: none;
+@media (min-width: 900px) {
+  .filter-btn,
+  .stage-filter {
+    top: 1.25rem;
+    left: 2rem;
   }
 
-  .btn-primary {
-    width: 100%;
-    margin-left: 0;
+  .slider-btn.prev {
+    left: 2rem;
+  }
+
+  .slider-btn.next {
+    right: 2rem;
+  }
+}
+
+@media (max-width: 700px) {
+  .stage {
+    height: calc(100dvh - 104px);
+  }
+
+  .slider-btn {
+    width: 48px;
+    height: 48px;
+  }
+
+  .slider-btn svg {
+    width: 24px;
+    height: 24px;
   }
 }
 </style>

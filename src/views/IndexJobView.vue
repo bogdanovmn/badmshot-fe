@@ -242,23 +242,27 @@ h1 {
 }
 
 .btn-primary {
-  border: none;
-  background: var(--color-primary);
-  color: var(--color-on-primary);
+  border: 1px solid var(--btn-primary-bg);
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--color-primary-hover);
+  background: var(--btn-primary-bg-hover);
+  color: var(--btn-primary-text-hover);
+  border-color: var(--btn-primary-bg-hover);
 }
 
 .btn-secondary {
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-primary);
+  border: 1px solid var(--btn-ghost-border);
+  background: transparent;
+  color: var(--text-primary);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: var(--color-primary-soft);
+  background: var(--text-primary);
+  color: var(--accent-dark);
+  border-color: var(--text-primary);
 }
 
 .btn-primary:disabled,

@@ -509,17 +509,18 @@ h2 {
 .btn-secondary {
   min-height: 40px;
   padding: 0.5rem 1.2rem;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--btn-ghost-border);
   border-radius: 6px;
-  background: var(--color-surface);
-  color: var(--color-primary);
+  background: transparent;
+  color: var(--text-primary);
   font-weight: 600;
   cursor: pointer;
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: var(--color-primary-soft);
-  border-color: var(--color-primary);
+  background: var(--text-primary);
+  color: var(--accent-dark);
+  border-color: var(--text-primary);
 }
 
 .btn-secondary:disabled {

@@ -26,42 +26,65 @@
       <div v-if="blur" class="fx-vignette" aria-hidden="true"></div>
       <div v-if="showMeta" class="bottom-scrim" aria-hidden="true"></div>
 
-      <div v-if="effects" class="fx-controls">
-        <div class="fx-item">
-          <label class="fx-toggle">
-            <input v-model="halftone" type="checkbox" />
-            <span>Газетная сетка</span>
-          </label>
-          <label v-if="halftone" class="fx-slider">
-            <span>Сила <em>{{ halftoneStrength }}</em></span>
-            <input v-model.number="halftoneStrength" type="range" min="0" max="100" step="1" />
-          </label>
-        </div>
+      <div v-if="effects" class="fx-dock">
+        <button
+          class="fx-btn"
+          type="button"
+          :class="{ active: effectsOpen }"
+          :title="effectsOpen ? 'Скрыть настройки эффектов' : 'Настроить эффекты'"
+          aria-label="Настройки эффектов"
+          @click="effectsOpen = !effectsOpen"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="4" y1="21" x2="4" y2="14" />
+            <line x1="4" y1="10" x2="4" y2="3" />
+            <line x1="12" y1="21" x2="12" y2="12" />
+            <line x1="12" y1="8" x2="12" y2="3" />
+            <line x1="20" y1="21" x2="20" y2="16" />
+            <line x1="20" y1="12" x2="20" y2="3" />
+            <line x1="1" y1="14" x2="7" y2="14" />
+            <line x1="9" y1="8" x2="15" y2="8" />
+            <line x1="17" y1="16" x2="23" y2="16" />
+          </svg>
+        </button>
 
-        <div class="fx-item">
-          <label class="fx-toggle">
-            <input v-model="blur" type="checkbox" />
-            <span>Кино-размытие</span>
-          </label>
-          <label v-if="blur" class="fx-slider">
-            <span>Сила <em>{{ blurStrength }}</em></span>
-            <input v-model.number="blurStrength" type="range" min="0" max="100" step="1" />
-          </label>
-        </div>
+        <div v-if="effectsOpen" class="fx-controls">
+          <div class="fx-item">
+            <label class="fx-toggle">
+              <input v-model="halftone" type="checkbox" />
+              <span>Газетная сетка</span>
+            </label>
+            <label v-if="halftone" class="fx-slider">
+              <span>Сила <em>{{ halftoneStrength }}</em></span>
+              <input v-model.number="halftoneStrength" type="range" min="0" max="100" step="1" />
+            </label>
+          </div>
 
-        <div class="fx-item">
-          <label class="fx-toggle">
-            <input v-model="pixelate" type="checkbox" />
-            <span>Ретро-пиксели</span>
-          </label>
-          <label v-if="pixelate" class="fx-slider">
-            <span>Пиксель <em>{{ pixelStrength }}</em></span>
-            <input v-model.number="pixelStrength" type="range" min="0" max="100" step="1" />
-          </label>
-          <label v-if="pixelate" class="fx-slider">
-            <span>Цвета <em>{{ pixelColors }}</em></span>
-            <input v-model.number="pixelColors" type="range" min="2" max="16" step="1" />
-          </label>
+          <div class="fx-item">
+            <label class="fx-toggle">
+              <input v-model="blur" type="checkbox" />
+              <span>Кино-размытие</span>
+            </label>
+            <label v-if="blur" class="fx-slider">
+              <span>Сила <em>{{ blurStrength }}</em></span>
+              <input v-model.number="blurStrength" type="range" min="0" max="100" step="1" />
+            </label>
+          </div>
+
+          <div class="fx-item">
+            <label class="fx-toggle">
+              <input v-model="pixelate" type="checkbox" />
+              <span>Ретро-пиксели</span>
+            </label>
+            <label v-if="pixelate" class="fx-slider">
+              <span>Пиксель <em>{{ pixelStrength }}</em></span>
+              <input v-model.number="pixelStrength" type="range" min="0" max="100" step="1" />
+            </label>
+            <label v-if="pixelate" class="fx-slider">
+              <span>Цвета <em>{{ pixelColors }}</em></span>
+              <input v-model.number="pixelColors" type="range" min="2" max="16" step="1" />
+            </label>
+          </div>
         </div>
       </div>
 
@@ -70,9 +93,10 @@
         <div class="meta-row">
           <span v-if="card.matchDate" class="date">{{ formatDate(card.matchDate) }}</span>
           <span v-if="card.clubName" class="club">{{ card.clubName }}</span>
-          <span v-if="card.tournament" class="badge">турнир</span>
         </div>
       </div>
+
+      <slot name="overlay"></slot>
 
       <button
         v-if="actionable"
@@ -86,7 +110,6 @@
         <svg viewBox="0 0 24 24" :fill="card.liked ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
         </svg>
-        <span class="like-count">{{ card.likes }}</span>
       </button>
     </div>
   </figure>
@@ -99,7 +122,7 @@ import type { ScreenshotCard } from '@/api'
 import { screenshotUrl } from '@/api'
 import { formatDateRu } from '@/common'
 
-const EFFECTS_STORAGE_KEY = 'badmshot.frameEffects'
+const EFFECTS_STORAGE_KEY = 'badmshot.frameEffects.v2'
 
 const BAYER = [
   [0, 8, 2, 10],
@@ -128,13 +151,14 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{ 'toggle-like': [] }>()
 
 const loaded = ref(false)
-const halftone = ref(false)
-const halftoneStrength = ref(50)
-const blur = ref(false)
-const blurStrength = ref(45)
-const pixelate = ref(false)
-const pixelStrength = ref(45)
-const pixelColors = ref(6)
+const effectsOpen = ref(false)
+const halftone = ref(true)
+const halftoneStrength = ref(3)
+const blur = ref(true)
+const blurStrength = ref(0)
+const pixelate = ref(true)
+const pixelStrength = ref(0)
+const pixelColors = ref(10)
 
 const pixelCanvas = ref<HTMLCanvasElement | null>(null)
 const pixelReady = ref(false)
@@ -147,29 +171,29 @@ const aspectStyle = computed<CSSProperties>(() => ({
 }))
 
 const effectStyle = computed<CSSProperties>(() => {
-  const strength = halftoneStrength.value / 100
+  const strength = clamp(halftoneStrength.value, 0, 100) / 100
   const step = 3 + strength * 8
   return {
     '--halftone-step': `${step.toFixed(1)}px`,
     '--halftone-dot': `${(step * 0.34).toFixed(2)}px`,
     '--halftone-opacity': `${(0.25 + strength * 0.55).toFixed(2)}`,
-    '--blur-scale': `${(1.005 + (blurStrength.value / 100) * 0.035).toFixed(3)}`
+    '--blur-scale': `${(1.005 + (clamp(blurStrength.value, 0, 100) / 100) * 0.035).toFixed(3)}`
   } as CSSProperties
 })
 
 const imageFilter = computed(() => {
   const parts: string[] = []
   if (halftone.value) {
-    const strength = halftoneStrength.value / 100
+    const strength = clamp(halftoneStrength.value, 0, 100) / 100
     parts.push(
       `grayscale(${(0.35 + strength * 0.65).toFixed(2)})`,
       `contrast(${(1 + strength * 0.45).toFixed(2)})`
     )
   }
   if (blur.value) {
-    const strength = blurStrength.value / 100
+    const strength = clamp(blurStrength.value, 0, 100) / 100
     parts.push(
-      `blur(${(0.4 + strength * 7).toFixed(2)}px)`,
+      `blur(${(strength * 7).toFixed(2)}px)`,
       `saturate(${(1 + strength * 0.3).toFixed(2)})`,
       `brightness(${(1 - strength * 0.12).toFixed(2)})`
     )
@@ -177,39 +201,45 @@ const imageFilter = computed(() => {
   return parts.length ? parts.join(' ') : 'none'
 })
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
+}
+
 function formatDate(value: string): string {
   return formatDateRu(value)
+}
+
+function applyDefaults() {
+  halftone.value = true
+  halftoneStrength.value = 3
+  blur.value = true
+  blurStrength.value = 0
+  pixelate.value = true
+  pixelStrength.value = 0
+  pixelColors.value = 10
 }
 
 function loadEffects() {
   try {
     const saved = JSON.parse(localStorage.getItem(EFFECTS_STORAGE_KEY) || 'null')
-    if (saved) {
-      halftone.value = Boolean(saved.halftone)
-      halftoneStrength.value = numberOr(saved.halftoneStrength, 50)
-      blur.value = Boolean(saved.blur)
-      blurStrength.value = numberOr(saved.blurStrength, 45)
-      pixelate.value = Boolean(saved.pixelate)
-      pixelStrength.value = numberOr(saved.pixelStrength, 45)
-      pixelColors.value = numberOr(saved.pixelColors, 6)
+    if (!saved) {
+      applyDefaults()
+      return
     }
+    halftone.value = Boolean(saved.halftone)
+    halftoneStrength.value = numberOr(saved.halftoneStrength, 3)
+    blur.value = Boolean(saved.blur)
+    blurStrength.value = numberOr(saved.blurStrength, 0)
+    pixelate.value = Boolean(saved.pixelate)
+    pixelStrength.value = numberOr(saved.pixelStrength, 0)
+    pixelColors.value = numberOr(saved.pixelColors, 10)
   } catch {
-    resetEffects()
+    applyDefaults()
   }
 }
 
 function numberOr(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
-}
-
-function resetEffects() {
-  halftone.value = false
-  halftoneStrength.value = 50
-  blur.value = false
-  blurStrength.value = 45
-  pixelate.value = false
-  pixelStrength.value = 45
-  pixelColors.value = 6
 }
 
 function saveEffects() {
@@ -270,7 +300,7 @@ async function renderPixelArt() {
 
   const width = Math.max(1, props.card.width || source.naturalWidth)
   const height = Math.max(1, props.card.height || source.naturalHeight)
-  const block = Math.max(1, Math.round(1 + (pixelStrength.value / 100) * 31))
+  const block = Math.max(1, Math.round(1 + (clamp(pixelStrength.value, 0, 100) / 100) * 31))
   const smallWidth = Math.max(1, Math.floor(width / block))
   const smallHeight = Math.max(1, Math.floor(height / block))
 
@@ -391,6 +421,7 @@ onBeforeUnmount(() => {
 
 .frame--full {
   width: 100vw;
+  height: calc(100dvh - 64px);
   margin-left: calc(50% - 50vw);
   margin-right: calc(50% - 50vw);
 }
@@ -406,8 +437,9 @@ onBeforeUnmount(() => {
 
 .frame--full .image-wrap {
   border-radius: 0;
-  max-height: 86vh;
-  background: #1b140d;
+  height: 100%;
+  max-height: none;
+  background: var(--image-bg);
 }
 
 .image-wrap img,
@@ -417,6 +449,11 @@ onBeforeUnmount(() => {
   height: 100%;
   object-fit: cover;
   transition: filter 0.25s ease, transform 0.25s ease;
+}
+
+.frame--full .image-wrap img,
+.frame--full .fx-pixel {
+  object-fit: contain;
 }
 
 .fx-pixel {
@@ -438,7 +475,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-muted);
+  color: var(--text-secondary);
   font-size: 0.9rem;
 }
 
@@ -449,7 +486,7 @@ onBeforeUnmount(() => {
   pointer-events: none;
   background-image: radial-gradient(
     circle,
-    rgba(26, 18, 11, 0.92) var(--halftone-dot, 1px),
+    var(--halftone-ink) var(--halftone-dot, 1px),
     transparent calc(var(--halftone-dot, 1px) + 0.6px)
   );
   background-size: var(--halftone-step, 4px) var(--halftone-step, 4px);
@@ -467,7 +504,7 @@ onBeforeUnmount(() => {
   inset: 0;
   z-index: 1;
   pointer-events: none;
-  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 42%, rgba(0, 0, 0, 0.62) 100%);
+  background: radial-gradient(ellipse at center, transparent 42%, var(--vignette-color) 100%);
 }
 
 .bottom-scrim {
@@ -476,22 +513,61 @@ onBeforeUnmount(() => {
   height: 42%;
   z-index: 1;
   pointer-events: none;
-  background: linear-gradient(to top, rgba(12, 8, 4, 0.82), rgba(12, 8, 4, 0.28) 55%, transparent);
+  background: linear-gradient(
+    to top,
+    var(--overlay-scrim-strong),
+    var(--overlay-scrim-soft) 55%,
+    transparent
+  );
 }
 
-.fx-controls {
+.fx-dock {
   position: absolute;
   top: 0.75rem;
   right: 0.75rem;
   z-index: 4;
   display: flex;
   flex-direction: column;
+  align-items: flex-end;
+  gap: 0.45rem;
+}
+
+.fx-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--overlay-divider);
+  border-radius: 50%;
+  background: var(--overlay-panel);
+  color: var(--text-primary);
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+
+.fx-btn:hover,
+.fx-btn.active {
+  background: var(--text-primary);
+  color: var(--accent-dark);
+}
+
+.fx-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.fx-controls {
+  display: flex;
+  flex-direction: column;
   gap: 0.5rem;
   width: min(260px, calc(100vw - 1.5rem));
-  padding: 0.55rem;
+  padding: 0.6rem;
+  border: 1px solid var(--overlay-divider);
   border-radius: 10px;
-  background: rgba(20, 14, 8, 0.68);
-  backdrop-filter: blur(6px);
+  background: var(--overlay-panel);
+  backdrop-filter: blur(8px);
 }
 
 .fx-item {
@@ -499,7 +575,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 0.25rem;
   padding-bottom: 0.35rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid var(--overlay-divider);
 }
 
 .fx-item:last-child {
@@ -513,7 +589,7 @@ onBeforeUnmount(() => {
   gap: 0.4rem;
   padding: 0.15rem 0.25rem;
   border-radius: 6px;
-  color: #fff;
+  color: var(--text-primary);
   font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
@@ -521,7 +597,7 @@ onBeforeUnmount(() => {
 }
 
 .fx-toggle input {
-  accent-color: var(--color-gold);
+  accent-color: var(--text-primary);
   cursor: pointer;
 }
 
@@ -530,24 +606,26 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 0.1rem;
   padding: 0 0.25rem;
-  color: rgba(255, 255, 255, 0.88);
+  color: var(--text-primary);
   font-size: 0.7rem;
 }
 
 .fx-slider span {
   display: flex;
   justify-content: space-between;
+  color: var(--text-secondary);
 }
 
 .fx-slider em {
   font-style: normal;
-  opacity: 0.75;
+  color: var(--text-primary);
+  opacity: 0.8;
 }
 
 .fx-slider input[type='range'] {
   width: 100%;
   margin: 0;
-  accent-color: var(--color-gold);
+  accent-color: var(--text-primary);
   cursor: pointer;
 }
 
@@ -560,8 +638,8 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 0.2rem;
   max-width: min(70%, 900px);
-  color: #fff;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+  color: var(--text-primary);
+  text-shadow: 0 1px 4px var(--accent-dark);
 }
 
 .caption .players {
@@ -576,22 +654,16 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   gap: 0.5rem;
   font-size: clamp(0.72rem, 0.3vw + 0.6rem, 0.95rem);
+  color: var(--text-secondary);
 }
 
 .date {
   font-weight: 600;
+  color: var(--text-primary);
 }
 
 .club {
-  opacity: 0.85;
-}
-
-.badge {
-  font-size: 0.65rem;
-  font-weight: 500;
-  border: 1px solid rgba(255, 255, 255, 0.75);
-  border-radius: 4px;
-  padding: 0.02rem 0.4rem;
+  color: var(--text-secondary);
 }
 
 .like-btn {
@@ -601,25 +673,31 @@ onBeforeUnmount(() => {
   z-index: 3;
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  min-height: 40px;
-  padding: 0.3rem 0.75rem;
-  border: none;
-  border-radius: 20px;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  border: 1px solid var(--overlay-divider);
+  border-radius: 50%;
   cursor: pointer;
-  background: var(--color-overlay);
-  color: #fff;
-  font-weight: 600;
+  background: var(--overlay-panel);
+  color: var(--text-primary);
+  backdrop-filter: blur(6px);
   transition: background-color 0.2s, color 0.2s;
 }
 
 .like-btn:hover:not(:disabled) {
-  background: var(--color-primary);
+  background: var(--text-primary);
+  color: var(--accent-dark);
 }
 
 .like-btn.active {
-  background: var(--color-primary);
-  color: var(--color-gold);
+  color: var(--text-primary);
+  border-color: var(--text-secondary);
+}
+
+.like-btn.active svg {
+  color: var(--text-primary);
 }
 
 .like-btn:disabled {
@@ -628,12 +706,8 @@ onBeforeUnmount(() => {
 }
 
 .like-btn svg {
-  width: 18px;
-  height: 18px;
-}
-
-.like-count {
-  font-size: 0.85rem;
+  width: 34px;
+  height: 34px;
 }
 
 .frame--full .caption {
@@ -652,9 +726,15 @@ onBeforeUnmount(() => {
     bottom: 2rem;
   }
 
-  .frame--full .fx-controls {
-    top: 1.5rem;
-    right: 2.5rem;
+  .fx-dock {
+    top: 1.25rem;
+    right: 2rem;
+  }
+}
+
+@media (max-width: 700px) {
+  .frame--full {
+    height: calc(100dvh - 104px);
   }
 }
 </style>

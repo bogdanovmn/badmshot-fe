@@ -97,12 +97,18 @@ onMounted(() => {
 .btn-primary {
   display: inline-block;
   padding: 0.6rem 1.5rem;
-  background: var(--color-primary);
-  color: var(--color-on-primary);
-  border: none;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+  border: 1px solid var(--btn-primary-bg);
   border-radius: 6px;
   font-size: 1rem;
   cursor: pointer;
   min-height: 44px;
+}
+
+.btn-primary:hover {
+  background: var(--btn-primary-bg-hover);
+  color: var(--btn-primary-text-hover);
+  border-color: var(--btn-primary-bg-hover);
 }
 </style>

@@ -224,7 +224,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  background: rgba(20, 14, 8, 0.55);
+  background: var(--overlay-backdrop);
   backdrop-filter: blur(3px);
 }
 
@@ -236,7 +236,7 @@ onBeforeUnmount(() => {
   border: 1px solid var(--color-border);
   border-radius: 14px;
   background: var(--color-surface);
-  box-shadow: 0 24px 70px rgba(20, 14, 8, 0.4);
+  box-shadow: var(--shadow-strong);
   overflow: hidden;
 }
 
@@ -256,17 +256,18 @@ onBeforeUnmount(() => {
 .close-btn {
   width: 36px;
   height: 36px;
-  border: none;
+  border: 1px solid var(--color-border);
   border-radius: 50%;
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: transparent;
+  color: var(--text-primary);
   font-size: 1.4rem;
   line-height: 1;
   cursor: pointer;
 }
 
 .close-btn:hover {
-  background: var(--color-border);
+  background: var(--text-primary);
+  color: var(--accent-dark);
 }
 
 .dialog-body {
@@ -299,12 +300,17 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 0.3rem;
   padding: 0.25rem 0.6rem;
-  border: none;
+  border: 1px solid var(--color-border);
   border-radius: 14px;
-  background: var(--color-primary);
-  color: var(--color-on-primary);
+  background: var(--accent-dark);
+  color: var(--text-primary);
   font-size: 0.85rem;
   cursor: pointer;
+}
+
+.chip:hover {
+  background: var(--text-primary);
+  color: var(--accent-dark);
 }
 
 .chip-x {
@@ -327,8 +333,8 @@ onBeforeUnmount(() => {
 }
 
 .search:focus {
-  outline: 2px solid var(--color-primary-soft);
-  border-color: var(--color-primary);
+  outline: 2px solid var(--text-muted);
+  border-color: var(--text-secondary);
 }
 
 .search-status {
@@ -391,22 +397,25 @@ onBeforeUnmount(() => {
 }
 
 .btn-ghost {
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--btn-ghost-border);
   background: transparent;
-  color: var(--color-primary);
+  color: var(--text-primary);
 }
 
 .btn-ghost:hover {
-  background: var(--color-primary-soft);
+  background: var(--text-primary);
+  color: var(--accent-dark);
 }
 
 .btn-primary {
-  border: none;
-  background: var(--color-primary);
-  color: var(--color-on-primary);
+  border: 1px solid var(--btn-primary-bg);
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
 }
 
 .btn-primary:hover {
-  background: var(--color-primary-hover);
+  background: var(--btn-primary-bg-hover);
+  color: var(--btn-primary-text-hover);
+  border-color: var(--btn-primary-bg-hover);
 }
 </style>

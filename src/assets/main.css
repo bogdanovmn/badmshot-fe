@@ -1,23 +1,52 @@
 :root {
-  --color-bg: #f3ecdb;
-  --color-surface: #fbf5e8;
-  --color-text: #3a2f22;
-  --color-muted: #857458;
-  --color-border: #d5c7a8;
-  --color-primary: #5d4a35;
-  --color-primary-hover: #463728;
-  --color-primary-soft: #e6dbc0;
-  --color-on-primary: #f6efdf;
-  --color-nav: #4a3b29;
-  --color-nav-hover: #5b4b38;
-  --color-nav-link: #c6b99b;
-  --color-danger: #6b4630;
-  --color-danger-soft: #e8d6bd;
-  --color-success: #6a7f3f;
-  --color-success-soft: #e2e8c8;
-  --color-gold: #c9a227;
-  --color-row-border: #e7dcc2;
-  --color-overlay: rgba(58, 47, 34, 0.55);
+  color-scheme: dark;
+
+  /* Dark palette */
+  --bg-main: #1a1a1a;
+  --bg-surface: #333333;
+  --text-primary: #c8c6c1;
+  --text-secondary: #9a9a95;
+  --text-muted: #55564f;
+  --accent-dark: #0a0a0a;
+
+  /* Legacy semantic aliases */
+  --color-bg: var(--bg-main);
+  --color-surface: var(--bg-surface);
+  --color-text: var(--text-primary);
+  --color-muted: var(--text-secondary);
+  --color-border: var(--text-muted);
+  --color-row-border: rgba(85, 86, 79, 0.5);
+  --color-primary: var(--text-primary);
+  --color-primary-hover: var(--text-secondary);
+  --color-primary-soft: #3d3d3b;
+  --color-on-primary: var(--accent-dark);
+  --color-nav: var(--bg-surface);
+  --color-nav-hover: #3f3f3c;
+  --color-nav-link: var(--text-secondary);
+  --color-danger: #b98f7c;
+  --color-danger-soft: #3a2d28;
+  --color-success: #95a888;
+  --color-success-soft: #2b3227;
+  --color-gold: var(--text-primary);
+  --color-overlay: rgba(10, 10, 10, 0.55);
+
+  /* Buttons */
+  --btn-primary-bg: var(--accent-dark);
+  --btn-primary-text: var(--text-primary);
+  --btn-primary-bg-hover: var(--text-primary);
+  --btn-primary-text-hover: var(--accent-dark);
+  --btn-ghost-border: var(--text-muted);
+
+  /* Overlays and effects */
+  --overlay-backdrop: rgba(10, 10, 10, 0.72);
+  --overlay-panel: rgba(26, 26, 26, 0.78);
+  --overlay-divider: rgba(200, 198, 193, 0.16);
+  --overlay-scrim-strong: rgba(10, 10, 10, 0.82);
+  --overlay-scrim-soft: rgba(10, 10, 10, 0.28);
+  --vignette-color: rgba(10, 10, 10, 0.62);
+  --halftone-ink: rgba(10, 10, 10, 0.92);
+  --shadow-strong: 0 24px 70px rgba(0, 0, 0, 0.55);
+  --image-bg: var(--accent-dark);
 }
 
 * {
@@ -34,8 +63,8 @@ html {
 
 body {
   font-family: 'Roboto', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
-  color: var(--color-text);
-  background: var(--color-bg);
+  color: var(--text-primary);
+  background: var(--bg-main);
   font-size: 16px;
   line-height: 1.5;
   overflow-x: hidden;
@@ -50,4 +79,18 @@ select {
 
 button {
   touch-action: manipulation;
+}
+
+a {
+  color: var(--text-primary);
+}
+
+a:hover {
+  color: var(--text-secondary);
+  text-decoration: underline;
+}
+
+:focus-visible {
+  outline: 2px solid var(--text-secondary);
+  outline-offset: 2px;
 }

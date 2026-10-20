@@ -37,7 +37,7 @@
         </template>
       </div>
     </nav>
-    <main class="content">
+    <main class="content" :class="{ 'content--immersive': immersive }">
       <router-view />
     </main>
     <footer class="footer">
@@ -50,15 +50,17 @@
 </template>
 
 <script setup lang="ts">
-import { inject, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, inject, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { authStore } from '@/stores/auth'
 import { logout } from '@/logout'
 import { getBackendVersion } from '@/api'
 import { SsoService } from '@bogdanovmn/ssofw'
 
 const router = useRouter()
+const route = useRoute()
 const auth = authStore()
+const immersive = computed(() => route.path === '/' || route.path === '/explore')
 const ssoService = inject<SsoService>('ssoService')!
 const backendVersion = ref<string | null>(null)
 const frontendVersion = import.meta.env.FRONTEND_VERSION
@@ -101,13 +103,13 @@ async function handleLogout() {
   align-items: center;
   padding: 0.75rem 1rem;
   background: var(--color-nav);
-  color: var(--color-on-primary);
+  color: var(--text-primary);
   flex-wrap: wrap;
   gap: 0.5rem;
 }
 
 .nav-brand a {
-  color: var(--color-on-primary);
+  color: var(--text-primary);
   text-decoration: none;
   font-size: 1.25rem;
   font-weight: bold;
@@ -129,7 +131,7 @@ async function handleLogout() {
 
 .nav-links a:hover,
 .nav-links a.router-link-active {
-  color: var(--color-on-primary);
+  color: var(--text-primary);
 }
 
 .user-name {
@@ -151,12 +153,13 @@ async function handleLogout() {
   border: none;
   border-radius: 50%;
   cursor: pointer;
-  background: var(--color-primary);
-  color: var(--color-on-primary);
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
 }
 
 .icon-btn:hover {
-  background: var(--color-nav-hover);
+  background: var(--btn-primary-bg-hover);
+  color: var(--btn-primary-text-hover);
 }
 
 .icon-btn svg {
@@ -171,6 +174,12 @@ async function handleLogout() {
   min-width: 0;
   margin: 1rem auto;
   padding: 0 1rem;
+}
+
+.content--immersive {
+  max-width: none;
+  margin: 0;
+  padding: 0;
 }
 
 .footer {
@@ -191,7 +200,7 @@ async function handleLogout() {
 }
 
 .footer-links a:hover {
-  color: var(--color-primary);
+  color: var(--text-primary);
   text-decoration: underline;
 }
 

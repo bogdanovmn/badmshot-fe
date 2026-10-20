@@ -204,16 +204,18 @@ h1 {
 .btn-primary {
   min-height: 40px;
   padding: 0.5rem 1.1rem;
-  border: none;
+  border: 1px solid var(--btn-primary-bg);
   border-radius: 6px;
-  background: var(--color-primary);
-  color: var(--color-on-primary);
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
   font-weight: 600;
   cursor: pointer;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--color-primary-hover);
+  background: var(--btn-primary-bg-hover);
+  color: var(--btn-primary-text-hover);
+  border-color: var(--btn-primary-bg-hover);
 }
 
 .btn-primary:disabled {

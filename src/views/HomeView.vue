@@ -1,56 +1,98 @@
 <template>
   <div class="home">
-    <div class="intro">
-      <h1>Случайный кадр</h1>
-      <p class="hint" v-if="!auth.isAuthenticated">
-        Войдите, чтобы выбирать кадры по игрокам и клубам и ставить лайки.
-      </p>
+    <ScreenshotFrame
+      v-if="card"
+      :card="card"
+      :width="1920"
+      full
+      effects
+      :actionable="auth.isAuthenticated"
+      :busy="busy"
+      @toggle-like="toggleLike"
+    >
+      <template #overlay>
+        <button
+          class="slider-btn prev"
+          type="button"
+          :disabled="!canPrev"
+          title="Предыдущий кадр"
+          aria-label="Предыдущий кадр"
+          @click="prev"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
+        <button
+          class="slider-btn next"
+          type="button"
+          :disabled="busy"
+          title="Следующий кадр"
+          aria-label="Следующий кадр"
+          @click="next"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </button>
+      </template>
+    </ScreenshotFrame>
+
+    <div v-else class="stage">
+      <div v-if="busy" class="stage-text">Загрузка кадра...</div>
+      <div v-else-if="error" class="stage-text stage-error">{{ error }}</div>
+      <button v-else class="stage-cta" type="button" @click="next">Показать кадр</button>
     </div>
 
-    <div v-if="error" class="error">{{ error }}</div>
-
-    <div v-if="!card && !error" class="loading">Загрузка...</div>
-
-    <template v-else-if="card">
-      <ScreenshotFrame
-        :card="card"
-        :width="1920"
-        full
-        effects
-        :actionable="auth.isAuthenticated"
-        :busy="busy"
-        @toggle-like="toggleLike"
-      />
-      <button class="btn-secondary" :disabled="busy" @click="load">Другой кадр</button>
-    </template>
+    <div v-if="error && card" class="toast">{{ error }}</div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { authStore } from '@/stores/auth'
 import { getRandomScreenshot, likeScreenshot, unlikeScreenshot } from '@/api'
 import type { ScreenshotCard } from '@/api'
 import ScreenshotFrame from '@/components/ScreenshotFrame.vue'
 
-const REFRESH_SECONDS = 300
-
 const auth = authStore()
-const card = ref<ScreenshotCard | null>(null)
-const error = ref<string | null>(null)
-const busy = ref(false)
-let timer: ReturnType<typeof setInterval> | null = null
 
-async function load() {
+const history = ref<ScreenshotCard[]>([])
+const historyIndex = ref(-1)
+const busy = ref(false)
+const error = ref<string | null>(null)
+
+const card = computed<ScreenshotCard | null>(() => history.value[historyIndex.value] ?? null)
+const canPrev = computed(() => historyIndex.value > 0)
+
+async function next() {
+  if (busy.value) {
+    return
+  }
+  if (historyIndex.value < history.value.length - 1) {
+    historyIndex.value++
+    return
+  }
+  busy.value = true
   error.value = null
   const current = card.value
   try {
-    card.value = await getRandomScreenshot({
+    const nextCard = await getRandomScreenshot({
       excludeMatchId: current?.matchId,
       excludeClubId: current?.clubId || undefined
     })
+    history.value = [...history.value, nextCard]
+    historyIndex.value = history.value.length - 1
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Не удалось загрузить кадр'
+  } finally {
+    busy.value = false
+  }
+}
+
+function prev() {
+  if (historyIndex.value > 0) {
+    historyIndex.value--
   }
 }
 
@@ -60,8 +102,9 @@ async function toggleLike() {
   }
   busy.value = true
   const current = card.value
+  const index = historyIndex.value
   const nextLiked = !current.liked
-  card.value = {
+  history.value[index] = {
     ...current,
     liked: nextLiked,
     likes: current.likes + (nextLiked ? 1 : -1)
@@ -73,78 +116,144 @@ async function toggleLike() {
       await unlikeScreenshot(current.id)
     }
   } catch (e) {
-    card.value = current
+    history.value[index] = current
     error.value = e instanceof Error ? e.message : 'Не удалось изменить лайк'
   } finally {
     busy.value = false
   }
 }
 
-onMounted(async () => {
+onMounted(() => {
   auth.update()
-  await load()
-  timer = setInterval(load, REFRESH_SECONDS * 1000)
-})
-
-onBeforeUnmount(() => {
-  if (timer) {
-    clearInterval(timer)
-  }
+  void next()
 })
 </script>
 
 <style scoped>
 .home {
+  position: relative;
+  width: 100%;
+}
+
+.stage {
   display: flex;
-  flex-direction: column;
-  gap: 1rem;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: calc(100dvh - 64px);
+  background: var(--image-bg);
 }
 
-.intro {
-  text-align: center;
-  max-width: 900px;
-  margin: 0 auto;
+.stage-text {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
 }
 
-h1 {
-  font-size: 1.5rem;
-  margin-bottom: 0.25rem;
-}
-
-.hint {
-  color: var(--color-muted);
-}
-
-.loading,
-.error {
-  text-align: center;
-  padding: 2rem 1rem;
-  color: var(--color-muted);
-}
-
-.error {
+.stage-error {
   color: var(--color-danger);
+  padding: 0 1rem;
+  text-align: center;
 }
 
-.btn-secondary {
-  align-self: center;
+.stage-cta {
   min-height: 44px;
   padding: 0.6rem 1.5rem;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background: var(--color-surface);
-  color: var(--color-primary);
+  border: 1px solid var(--btn-ghost-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary);
   font-weight: 600;
   cursor: pointer;
 }
 
-.btn-secondary:hover:not(:disabled) {
-  background: var(--color-primary-soft);
-  border-color: var(--color-primary);
+.stage-cta:hover {
+  background: var(--text-primary);
+  color: var(--accent-dark);
 }
 
-.btn-secondary:disabled {
-  opacity: 0.6;
+.slider-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border: 1px solid var(--overlay-divider);
+  border-radius: 50%;
+  background: var(--overlay-panel);
+  color: var(--text-primary);
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: background-color 0.2s, color 0.2s, opacity 0.2s;
+}
+
+.slider-btn:hover:not(:disabled) {
+  background: var(--text-primary);
+  color: var(--accent-dark);
+}
+
+.slider-btn:disabled {
+  opacity: 0.3;
   cursor: default;
+}
+
+.slider-btn svg {
+  width: 28px;
+  height: 28px;
+}
+
+.slider-btn.prev {
+  left: 0.75rem;
+}
+
+.slider-btn.next {
+  right: 0.75rem;
+}
+
+.toast {
+  position: fixed;
+  top: 5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  max-width: min(90vw, 420px);
+  padding: 0.6rem 1rem;
+  border: 1px solid var(--overlay-divider);
+  border-radius: 8px;
+  background: var(--overlay-panel);
+  color: var(--text-primary);
+  text-align: center;
+  font-size: 0.9rem;
+  backdrop-filter: blur(8px);
+}
+
+@media (min-width: 900px) {
+  .slider-btn.prev {
+    left: 2rem;
+  }
+
+  .slider-btn.next {
+    right: 2rem;
+  }
+}
+
+@media (max-width: 700px) {
+  .stage {
+    height: calc(100dvh - 104px);
+  }
+
+  .slider-btn {
+    width: 48px;
+    height: 48px;
+  }
+
+  .slider-btn svg {
+    width: 24px;
+    height: 24px;
+  }
 }
 </style>

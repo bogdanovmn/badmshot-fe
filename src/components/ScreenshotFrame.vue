@@ -163,7 +163,7 @@ const pixelColors = ref(10)
 const pixelCanvas = ref<HTMLCanvasElement | null>(null)
 const pixelReady = ref(false)
 
-const url = computed(() => screenshotUrl(props.card.id, props.full ? 1920 : props.width))
+const url = computed(() => screenshotUrl(props.card.id, props.full ? props.card.width : props.width))
 const altText = computed(() => props.card.players.join(', ') || 'Кадр из матча')
 
 const aspectStyle = computed<CSSProperties>(() => ({

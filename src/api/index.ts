@@ -169,15 +169,17 @@ export interface JobResponse {
 
 export type ArchiveJobMode = 'META' | 'SCREENSHOTS'
 
+export type ScreenshotFormat = 'jpeg' | 'webp'
+
 export interface IndexOptions {
   mode?: ArchiveJobMode
   screenshotsCount?: number
   marginSeconds?: number
-  reduceFactor?: number
+  scalePercent?: number
   quality?: number
   threads?: number
   player?: string
-  format?: string
+  format?: ScreenshotFormat
 }
 
 export interface MatchesQuery {

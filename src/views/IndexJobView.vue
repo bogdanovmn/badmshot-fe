@@ -20,11 +20,11 @@
         <input v-model.number="options.marginSeconds" type="number" min="0" />
       </label>
       <label class="field">
-        <span>Уменьшение разрешения</span>
-        <input v-model.number="options.reduceFactor" type="number" min="1" max="10" />
+        <span>Масштаб, % от оригинала</span>
+        <input v-model.number="options.scalePercent" type="number" min="1" max="100" />
       </label>
       <label class="field">
-        <span>Качество (jpeg/webp/avif)</span>
+        <span>Качество (JPEG/WebP)</span>
         <input v-model.number="options.quality" type="number" min="1" max="100" />
       </label>
       <label class="field">
@@ -41,10 +41,8 @@
       <label class="field">
         <span>Формат</span>
         <select v-model="options.format">
-          <option value="jpeg">JPEG</option>
-          <option value="png">PNG</option>
           <option value="webp">WebP</option>
-          <option value="avif">AVIF</option>
+          <option value="jpeg">JPEG</option>
         </select>
       </label>
     </section>
@@ -100,11 +98,11 @@ import { formatElapsed } from '@/common'
 const options = reactive<IndexOptions>({
   screenshotsCount: 12,
   marginSeconds: 30,
-  reduceFactor: 2,
-  quality: 80,
+  scalePercent: 50,
+  quality: 75,
   threads: 2,
   player: 'ffmpeg',
-  format: 'jpeg'
+  format: 'webp'
 })
 
 const job = ref<JobResponse | null>(null)

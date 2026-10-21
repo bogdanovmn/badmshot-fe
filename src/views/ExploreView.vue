@@ -94,6 +94,7 @@ import {
   getPlayersByIds,
   isRateLimited,
   likeScreenshot,
+  registerScreenshotView,
   unlikeScreenshot
 } from '@/api'
 import type { Club, Player, ScreenshotCard, ScreenshotFilter } from '@/api'
@@ -184,12 +185,9 @@ function showNotice(message: string) {
 }
 
 function filter(): ScreenshotFilter {
-  const current = card.value
   return {
     players: selectedPlayers.value.map(player => player.id),
-    clubs: selectedClubs.value.map(club => club.id),
-    excludeMatchId: current?.matchId,
-    excludeClubId: current?.clubId || undefined
+    clubs: selectedClubs.value.map(club => club.id)
   }
 }
 
@@ -307,6 +305,15 @@ watch(
     history.value = []
     historyIndex.value = -1
     await loadNext()
+  }
+)
+
+watch(
+  () => card.value?.id,
+  id => {
+    if (id) {
+      void registerScreenshotView(id)
+    }
   }
 )
 

@@ -1,3 +1,4 @@
+import { tokenStorage } from '@bogdanovmn/ssofw'
 import { apiBaseUrl, authApi, makeApiRequest } from './common'
 
 export interface AppVersion {
@@ -57,13 +58,12 @@ export interface ScreenshotCard {
   players: string[]
   likes: number
   liked: boolean
+  views: number
 }
 
 export interface ScreenshotFilter {
   players?: string[]
   clubs?: string[]
-  excludeMatchId?: string
-  excludeClubId?: string
 }
 
 export interface CatalogTag {
@@ -225,12 +225,20 @@ export async function saveFrameEffectSettings(settings: FrameEffectSettings): Pr
   await authApi.put('/frame-effects', settings)
 }
 
-export async function getRandomScreenshot(filter: ScreenshotFilter = {}): Promise<ScreenshotCard> {
-  return makeApiRequest<ScreenshotCard>('get', appendQuery('/screenshots/random', filter))
+export async function getTeaserScreenshots(): Promise<ScreenshotCard[]> {
+  return makeApiRequest<ScreenshotCard[]>('get', '/screenshots/teaser')
+}
+
+export async function getRandomScreenshot(): Promise<ScreenshotCard> {
+  return authApi.get<ScreenshotCard>('/screenshots/random')
 }
 
 export async function getNextScreenshot(filter: ScreenshotFilter = {}): Promise<ScreenshotCard> {
   return authApi.get<ScreenshotCard>(appendQuery('/screenshots/next', filter))
+}
+
+export async function registerScreenshotView(id: string): Promise<void> {
+  await authApi.post(`/screenshots/${id}/view`)
 }
 
 function appendQuery(url: string, params: ScreenshotFilter): string {
@@ -267,6 +275,23 @@ export async function unlikeScreenshot(id: string): Promise<void> {
 
 export function screenshotUrl(id: string, width: number): string {
   return `${apiBaseUrl}/screenshots/${id}/crop/${width}`
+}
+
+export async function screenshotImageUrl(id: string, width: number): Promise<string> {
+  const directUrl = screenshotUrl(id, width)
+  if (!tokenStorage.defined()) {
+    return directUrl
+  }
+  try {
+    const blob = await authApi.makeRequest<Blob>({
+      method: 'GET',
+      url: `/screenshots/${id}/crop/${width}`,
+      responseType: 'blob'
+    })
+    return URL.createObjectURL(blob)
+  } catch {
+    return directUrl
+  }
 }
 
 export async function getClubs(params: { playerId?: string } = {}): Promise<Club[]> {

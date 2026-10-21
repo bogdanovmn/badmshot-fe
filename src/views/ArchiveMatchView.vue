@@ -48,7 +48,11 @@
             :to="`/archive/matches/${detail.match.id}`"
             @click.prevent="openShot(shot.id)"
           >
-            <img :src="screenshotUrl(shot.id, 320)" :alt="`Кадр ${formatTimecode(shot.timecodeSeconds)}`" loading="lazy" />
+            <ScreenshotImage
+              :id="shot.id"
+              :width="320"
+              :alt="`Кадр ${formatTimecode(shot.timecodeSeconds)}`"
+            />
             <span class="shot-time">{{ formatTimecode(shot.timecodeSeconds) }}</span>
           </router-link>
         </div>
@@ -56,16 +60,17 @@
     </div>
 
     <div v-if="preview" class="lightbox" @click="preview = null">
-      <img :src="screenshotUrl(preview, 1280)" alt="Кадр" />
+      <ScreenshotImage :id="preview" :width="1280" alt="Кадр" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { getMatch, renameMatch, screenshotUrl } from '@/api'
+import { getMatch, renameMatch } from '@/api'
 import type { MatchDetail } from '@/api'
 import BackButton from '@/components/BackButton.vue'
+import ScreenshotImage from '@/components/ScreenshotImage.vue'
 import { formatBytesHuman, formatDurationHuman, formatTimecode } from '@/common'
 
 const props = defineProps<{ id: string }>()

@@ -7,6 +7,7 @@
     >
       <div v-if="!loaded" class="placeholder">Загрузка кадра...</div>
       <img
+        v-if="url"
         ref="frameImg"
         :src="url"
         :alt="altText"
@@ -128,6 +129,19 @@
 
       <slot name="overlay"></slot>
 
+      <div
+        v-if="card.views > 1"
+        class="views"
+        :class="{ 'views--with-like': actionable }"
+        :title="`Просмотров: ${formatViews(card.views)}`"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+          <circle cx="12" cy="12" r="3" />
+        </svg>
+        <span>{{ formatViews(card.views) }}</span>
+      </div>
+
       <button
         v-if="actionable"
         class="like-btn"
@@ -149,7 +163,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { CSSProperties } from 'vue'
 import type { FrameEffectSettings, ScreenshotCard } from '@/api'
-import { screenshotUrl } from '@/api'
+import { screenshotImageUrl } from '@/api'
 import { formatDateRu } from '@/common'
 import { DEFAULT_FRAME_EFFECTS, frameEffectsStore } from '@/stores/frameEffects'
 import { authStore } from '@/stores/auth'
@@ -225,8 +239,57 @@ const saveStatusText = computed(() => {
 
 let settingsReady = false
 
-const url = computed(() => screenshotUrl(props.card.id, props.full ? props.card.width : props.width))
+const url = ref('')
 const altText = computed(() => props.card.players.join(', ') || 'Кадр из матча')
+
+let currentObjectUrl: string | null = null
+let imageVersion = 0
+
+async function loadImage() {
+  const version = ++imageVersion
+  loaded.value = false
+  invalidatePixelSource()
+  try {
+    const nextUrl = await screenshotImageUrl(
+      props.card.id,
+      props.full ? props.card.width : props.width
+    )
+    if (version !== imageVersion) {
+      if (nextUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(nextUrl)
+      }
+      return
+    }
+    const previous = currentObjectUrl
+    currentObjectUrl = nextUrl.startsWith('blob:') ? nextUrl : null
+    url.value = nextUrl
+    if (previous && previous !== nextUrl) {
+      await nextTick()
+      URL.revokeObjectURL(previous)
+    }
+    if (pixelate.value || transitionBoost.value > 0.001) {
+      schedulePixelRender()
+    } else {
+      pixelReady.value = false
+    }
+  } catch {
+    if (version === imageVersion) {
+      if (currentObjectUrl) {
+        URL.revokeObjectURL(currentObjectUrl)
+        currentObjectUrl = null
+      }
+      url.value = ''
+      loaded.value = true
+    }
+  }
+}
+
+function releaseObjectUrl() {
+  if (currentObjectUrl) {
+    URL.revokeObjectURL(currentObjectUrl)
+    currentObjectUrl = null
+  }
+}
 
 const aspectStyle = computed<CSSProperties>(() => ({
   aspectRatio: `${props.card.width} / ${props.card.height}`
@@ -269,6 +332,10 @@ function clamp(value: number, min: number, max: number): number {
 
 function formatDate(value: string): string {
   return formatDateRu(value)
+}
+
+function formatViews(value: number): string {
+  return value.toLocaleString('ru-RU')
 }
 
 function applySettings(settings: FrameEffectSettings) {
@@ -520,30 +587,11 @@ function animateTransition(from: number, to: number, duration: number): Promise<
   })
 }
 
-function waitForFrameImage(timeoutMs: number): Promise<void> {
-  return new Promise(resolve => {
-    const image = frameImg.value
-    if (!image) {
-      resolve()
-      return
-    }
-    if (image.complete && image.naturalWidth > 0) {
-      resolve()
-      return
-    }
-    let timer: ReturnType<typeof setTimeout> | null = null
-    const done = () => {
-      image.removeEventListener('load', done)
-      image.removeEventListener('error', done)
-      if (timer) {
-        clearTimeout(timer)
-      }
-      resolve()
-    }
-    image.addEventListener('load', done)
-    image.addEventListener('error', done)
-    timer = setTimeout(done, timeoutMs)
-  })
+async function waitForFrameImage(timeoutMs: number): Promise<void> {
+  const started = performance.now()
+  while (!loaded.value && performance.now() - started < timeoutMs) {
+    await new Promise(resolve => setTimeout(resolve, 25))
+  }
 }
 
 async function runTransition(swap: () => void | Promise<void>): Promise<void> {
@@ -602,16 +650,11 @@ watch(
 )
 
 watch(
-  () => props.card.id,
+  () => [props.card.id, props.full ? props.card.width : props.width],
   () => {
-    loaded.value = false
-    invalidatePixelSource()
-    if (pixelate.value || transitionBoost.value > 0.001) {
-      schedulePixelRender()
-    } else {
-      pixelReady.value = false
-    }
-  }
+    void loadImage()
+  },
+  { immediate: true }
 )
 
 onMounted(() => {
@@ -634,6 +677,8 @@ onBeforeUnmount(() => {
     cancelAnimationFrame(transitionRaf)
   }
   sourceVersion++
+  imageVersion++
+  releaseObjectUrl()
 })
 </script>
 
@@ -927,6 +972,31 @@ onBeforeUnmount(() => {
   color: var(--text-secondary);
 }
 
+.views {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-weight: 600;
+  opacity: 0.65;
+  pointer-events: none;
+  text-shadow: 0 1px 4px var(--accent-dark);
+}
+
+.views--with-like {
+  right: calc(0.75rem + 64px + 0.5rem);
+}
+
+.views svg {
+  width: 20px;
+  height: 20px;
+}
+
 .like-btn {
   position: absolute;
   right: 0.75rem;
@@ -985,6 +1055,15 @@ onBeforeUnmount(() => {
   .frame--full .like-btn {
     right: 2.5rem;
     bottom: 2rem;
+  }
+
+  .frame--full .views {
+    right: 2.5rem;
+    bottom: 2rem;
+  }
+
+  .frame--full .views--with-like {
+    right: calc(2.5rem + 64px + 0.5rem);
   }
 
   .fx-dock {

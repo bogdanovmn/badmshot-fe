@@ -9,8 +9,8 @@ const router = createRouter({
   history: createWebHistory('/badmshot/'),
   routes: [
     { path: '/', component: HomeView },
-    { path: '/top', component: () => import('@/views/TopView.vue') },
-    { path: '/tags', component: () => import('@/views/TagsView.vue') },
+    { path: '/top', component: () => import('@/views/TopView.vue'), meta: { private: true } },
+    { path: '/tags', component: () => import('@/views/TagsView.vue'), meta: { private: true } },
     { path: '/explore', component: () => import('@/views/ExploreView.vue'), meta: { private: true } },
     { path: '/liked', component: () => import('@/views/LikedView.vue'), meta: { private: true } },
     { path: '/faq', component: () => import('@/views/FaqView.vue') },

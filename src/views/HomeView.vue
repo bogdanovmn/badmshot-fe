@@ -39,6 +39,28 @@
       </template>
     </ScreenshotFrame>
 
+    <div v-else-if="promo" class="teaser-end">
+      <div class="teaser-card">
+        <h1>Badm Shot</h1>
+        <p>
+          Сервис показывает случайные кадры из архива матчей по бадминтону.
+        </p>
+        <p>
+          Гостям доступно по одному случайному кадру из каждого клуба.
+          Полный архив, выбор кадров по игрокам и клубам, лайки и любимые кадры
+          открываются после регистрации.
+        </p>
+        <div class="teaser-actions">
+          <button class="stage-cta" type="button" @click="login">
+            Войти или зарегистрироваться
+          </button>
+          <button class="stage-link" type="button" @click="backToFrames">
+            Вернуться к кадрам
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div v-else class="stage">
       <div v-if="busy" class="stage-text">Загрузка кадра...</div>
       <div v-else-if="error" class="stage-text stage-error">{{ error }}</div>
@@ -50,23 +72,51 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { authStore } from '@/stores/auth'
-import { getRandomScreenshot, likeScreenshot, unlikeScreenshot } from '@/api'
+import {
+  getRandomScreenshot,
+  getTeaserScreenshots,
+  likeScreenshot,
+  registerScreenshotView,
+  unlikeScreenshot
+} from '@/api'
 import type { ScreenshotCard } from '@/api'
 import ScreenshotFrame from '@/components/ScreenshotFrame.vue'
 
 const auth = authStore()
+const router = useRouter()
 
 const frameRef = ref<InstanceType<typeof ScreenshotFrame> | null>(null)
 const history = ref<ScreenshotCard[]>([])
 const historyIndex = ref(-1)
+const promo = ref(false)
 const busy = ref(false)
 const transitioning = ref(false)
 const error = ref<string | null>(null)
 
-const card = computed<ScreenshotCard | null>(() => history.value[historyIndex.value] ?? null)
+const card = computed<ScreenshotCard | null>(() =>
+  promo.value ? null : history.value[historyIndex.value] ?? null
+)
 const canPrev = computed(() => historyIndex.value > 0)
+
+async function loadTeaser() {
+  busy.value = true
+  error.value = null
+  try {
+    const cards = await getTeaserScreenshots()
+    history.value = cards
+    historyIndex.value = cards.length ? 0 : -1
+    if (!cards.length) {
+      error.value = 'Кадры не найдены'
+    }
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Не удалось загрузить кадры'
+  } finally {
+    busy.value = false
+  }
+}
 
 async function loadNext() {
   if (busy.value) {
@@ -78,12 +128,8 @@ async function loadNext() {
   }
   busy.value = true
   error.value = null
-  const current = card.value
   try {
-    const nextCard = await getRandomScreenshot({
-      excludeMatchId: current?.matchId,
-      excludeClubId: current?.clubId || undefined
-    })
+    const nextCard = await getRandomScreenshot()
     history.value = [...history.value, nextCard]
     historyIndex.value = history.value.length - 1
   } catch (e) {
@@ -97,6 +143,10 @@ async function next() {
   if (busy.value || transitioning.value) {
     return
   }
+  if (!auth.isAuthenticated && historyIndex.value >= history.value.length - 1) {
+    promo.value = true
+    return
+  }
   transitioning.value = true
   try {
     if (frameRef.value) {
@@ -107,6 +157,10 @@ async function next() {
   } finally {
     transitioning.value = false
   }
+}
+
+function backToFrames() {
+  promo.value = false
 }
 
 async function prev() {
@@ -128,6 +182,10 @@ async function prev() {
   } finally {
     transitioning.value = false
   }
+}
+
+function login() {
+  void router.push('/login')
 }
 
 async function toggleLike() {
@@ -157,9 +215,22 @@ async function toggleLike() {
   }
 }
 
+watch(
+  () => card.value?.id,
+  id => {
+    if (id && auth.isAuthenticated) {
+      void registerScreenshotView(id)
+    }
+  }
+)
+
 onMounted(() => {
   auth.update()
-  void loadNext()
+  if (auth.isAuthenticated) {
+    void loadNext()
+  } else {
+    void loadTeaser()
+  }
 })
 </script>
 
@@ -208,6 +279,63 @@ onMounted(() => {
 .stage-cta:hover {
   background: var(--text-primary);
   color: var(--accent-dark);
+}
+
+.stage-link {
+  min-height: 44px;
+  padding: 0.6rem 1.5rem;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.stage-link:hover {
+  color: var(--text-primary);
+}
+
+.teaser-end {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 0;
+  padding: 2rem 1rem;
+  background: var(--image-bg);
+}
+
+.teaser-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 560px;
+  padding: 2rem;
+  border: 1px solid var(--overlay-divider);
+  border-radius: 16px;
+  background: var(--overlay-panel);
+  color: var(--text-primary);
+  text-align: center;
+  backdrop-filter: blur(8px);
+}
+
+.teaser-card h1 {
+  font-size: 1.6rem;
+}
+
+.teaser-card p {
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.teaser-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
 }
 
 .slider-btn {

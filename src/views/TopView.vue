@@ -10,9 +10,6 @@
         :key="card.id"
         :card="card"
         :width="480"
-        :actionable="auth.isAuthenticated"
-        :busy="busyId === card.id"
-        @toggle-like="toggleLike(card)"
       />
     </div>
   </div>
@@ -20,16 +17,13 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { authStore } from '@/stores/auth'
-import { getTopScreenshots, likeScreenshot, unlikeScreenshot } from '@/api'
+import { getTopScreenshots } from '@/api'
 import type { ScreenshotCard } from '@/api'
 import ScreenshotFrame from '@/components/ScreenshotFrame.vue'
 
-const auth = authStore()
 const cards = ref<ScreenshotCard[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
-const busyId = ref<string | null>(null)
 
 async function load() {
   loading.value = true
@@ -43,33 +37,7 @@ async function load() {
   }
 }
 
-async function toggleLike(card: ScreenshotCard) {
-  if (busyId.value) {
-    return
-  }
-  busyId.value = card.id
-  const nextLiked = !card.liked
-  card.liked = nextLiked
-  card.likes += nextLiked ? 1 : -1
-  try {
-    if (nextLiked) {
-      await likeScreenshot(card.id)
-    } else {
-      await unlikeScreenshot(card.id)
-    }
-  } catch (e) {
-    card.liked = !nextLiked
-    card.likes += nextLiked ? -1 : 1
-    error.value = e instanceof Error ? e.message : 'Не удалось изменить лайк'
-  } finally {
-    busyId.value = null
-  }
-}
-
-onMounted(() => {
-  auth.update()
-  load()
-})
+onMounted(load)
 </script>
 
 <style scoped>

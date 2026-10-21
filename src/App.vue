@@ -5,9 +5,9 @@
         <router-link to="/">Badm Shot</router-link>
       </div>
       <div class="nav-links">
-        <router-link to="/top">ТОП</router-link>
-        <router-link to="/tags">Тэги</router-link>
         <template v-if="auth.isAuthenticated">
+          <router-link to="/top">ТОП</router-link>
+          <router-link to="/tags">Тэги</router-link>
           <router-link to="/explore">Кадры</router-link>
           <router-link to="/liked">Любимые</router-link>
         </template>

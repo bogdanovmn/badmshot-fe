@@ -24,11 +24,19 @@ export interface Club {
   displayLabel: string
 }
 
+export interface PlayerAlias {
+  id: string
+  name: string
+  displayName: string | null
+  displayLabel: string
+}
+
 export interface Player {
   id: string
   name: string
   displayName: string | null
-  tournamentAlias: string | null
+  aliasOfPlayerId: string | null
+  alias: PlayerAlias | null
   displayLabel: string
 }
 
@@ -293,7 +301,7 @@ export async function getClubTags(): Promise<CatalogTag[]> {
 
 export async function updatePlayer(
   id: string,
-  data: { displayName?: string | null; tournamentAlias?: string | null }
+  data: { displayName?: string | null; aliasPlayerId?: string | null }
 ): Promise<void> {
   await authApi.put(`/players/${id}`, data)
 }

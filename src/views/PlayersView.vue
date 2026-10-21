@@ -1,7 +1,9 @@
 <template>
   <div class="page">
     <h1 v-if="!embedded">Игроки</h1>
-    <p class="hint">Псевдонимы и отображаемые имена. Поиск по имени.</p>
+    <p class="hint">
+      Псевдонимы и отображаемые имена. Псевдоним — другое имя игрока в имени файла: такие записи считаются одним игроком.
+    </p>
 
     <input v-model="term" class="search" type="text" placeholder="Поиск игрока..." />
 
@@ -13,15 +15,53 @@
         <div class="row-name">
           <span class="name">{{ player.name }}</span>
           <span class="label">{{ player.displayLabel }}</span>
+          <span v-if="aliasFor(player.id)" class="alias-hint">
+            Псевдоним: {{ aliasFor(player.id)?.displayLabel }}
+          </span>
         </div>
         <label class="field">
           <span>Отображаемое имя</span>
           <input v-model="edits[player.id].displayName" type="text" />
         </label>
-        <label class="field">
-          <span>Псевдоним</span>
-          <input v-model="edits[player.id].tournamentAlias" type="text" />
-        </label>
+        <div class="field alias-field">
+          <span>Псевдоним (имя в файле)</span>
+          <div v-if="aliasFor(player.id)" class="alias-chip">
+            <span class="alias-chip-label">{{ aliasFor(player.id)?.displayLabel }}</span>
+            <button
+              type="button"
+              class="chip-remove"
+              aria-label="Удалить псевдоним"
+              @click="removeAlias(player)"
+            >
+              ×
+            </button>
+          </div>
+          <div v-else class="alias-search-wrap">
+            <input
+              v-model="aliasTerm"
+              type="text"
+              placeholder="Начните вводить имя игрока..."
+              autocomplete="off"
+              @focus="focusAliasSearch(player)"
+              @blur="closeAliasSearch"
+            />
+            <span v-if="aliasLoading && aliasTargetId === player.id" class="alias-status">...</span>
+            <ul v-if="aliasTargetId === player.id && aliasTerm && aliasOptions.length" class="suggestions">
+              <li v-for="option in aliasOptions" :key="option.id">
+                <button type="button" @mousedown.prevent="selectAlias(player, option)">
+                  <span>{{ option.displayLabel }}</span>
+                  <span v-if="option.displayLabel !== option.name" class="suggest-name">{{ option.name }}</span>
+                </button>
+              </li>
+            </ul>
+            <p
+              v-else-if="aliasTargetId === player.id && aliasTerm && !aliasLoading"
+              class="no-results"
+            >
+              Ничего не найдено
+            </p>
+          </div>
+        </div>
         <div class="row-actions">
           <button class="btn-primary" :disabled="savingId === player.id || !isDirty(player)" @click="save(player)">
             {{ savingId === player.id ? '...' : 'Сохранить' }}
@@ -36,29 +76,50 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { getPlayers, updatePlayer } from '@/api'
-import type { Player } from '@/api'
+import type { Player, PlayerAlias } from '@/api'
 
 defineProps<{ embedded?: boolean }>()
 
+interface PlayerEdit {
+  displayName: string
+  alias: PlayerAlias | null
+}
+
 const term = ref('')
 const players = ref<Player[]>([])
-const edits = reactive<Record<string, { displayName: string; tournamentAlias: string }>>({})
+const edits = reactive<Record<string, PlayerEdit>>({})
 const loading = ref(true)
 const error = ref<string | null>(null)
 const savingId = ref<string | null>(null)
 const savedId = ref<string | null>(null)
 
+const aliasTargetId = ref<string | null>(null)
+const aliasTerm = ref('')
+const aliasOptions = ref<Player[]>([])
+const aliasLoading = ref(false)
+
 let timer: ReturnType<typeof setTimeout> | null = null
+let aliasTimer: ReturnType<typeof setTimeout> | null = null
+let aliasCloseTimer: ReturnType<typeof setTimeout> | null = null
+
+function comparePlayers(left: Player, right: Player): number {
+  return left.displayLabel.localeCompare(right.displayLabel, 'ru')
+}
+
+function aliasFor(id: string): PlayerAlias | null {
+  return edits[id]?.alias ?? null
+}
 
 async function load() {
   loading.value = true
   error.value = null
   try {
     players.value = await getPlayers({ term: term.value || undefined })
+    Object.keys(edits).forEach(key => delete edits[key])
     players.value.forEach(player => {
       edits[player.id] = {
         displayName: player.displayName || '',
-        tournamentAlias: player.tournamentAlias || ''
+        alias: player.alias
       }
     })
   } catch (e) {
@@ -73,7 +134,8 @@ function isDirty(player: Player): boolean {
   if (!edit) {
     return false
   }
-  return edit.displayName !== (player.displayName || '') || edit.tournamentAlias !== (player.tournamentAlias || '')
+  return edit.displayName !== (player.displayName || '')
+    || (edit.alias?.id ?? null) !== (player.alias?.id ?? null)
 }
 
 async function save(player: Player) {
@@ -87,17 +149,113 @@ async function save(player: Player) {
   try {
     await updatePlayer(player.id, {
       displayName: edit.displayName || null,
-      tournamentAlias: edit.tournamentAlias || null
+      aliasPlayerId: edit.alias?.id ?? null
     })
+
+    const previousAlias = player.alias
+    const newAlias = edit.alias ? { ...edit.alias } : null
+
     player.displayName = edit.displayName || null
-    player.tournamentAlias = edit.tournamentAlias || null
     player.displayLabel = edit.displayName || player.name
+    player.alias = newAlias
+    edit.alias = newAlias ? { ...newAlias } : null
+
+    if (newAlias) {
+      players.value = players.value.filter(option => option.id !== newAlias.id)
+      delete edits[newAlias.id]
+    }
+
+    if (previousAlias && previousAlias.id !== (newAlias?.id ?? null)) {
+      const restored: Player = {
+        id: previousAlias.id,
+        name: previousAlias.name,
+        displayName: previousAlias.displayName,
+        aliasOfPlayerId: null,
+        alias: null,
+        displayLabel: previousAlias.displayLabel
+      }
+      if (!players.value.some(option => option.id === restored.id)) {
+        players.value = [...players.value, restored]
+        edits[restored.id] = { displayName: restored.displayName || '', alias: null }
+      }
+    }
+
+    players.value = [...players.value].sort(comparePlayers)
     savedId.value = player.id
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Не удалось сохранить игрока'
   } finally {
     savingId.value = null
   }
+}
+
+function removeAlias(player: Player) {
+  const edit = edits[player.id]
+  if (edit) {
+    edit.alias = null
+  }
+}
+
+async function searchAliases() {
+  const targetId = aliasTargetId.value
+  if (!targetId || !aliasTerm.value.trim()) {
+    aliasOptions.value = []
+    return
+  }
+  aliasLoading.value = true
+  try {
+    const found = await getPlayers({ term: aliasTerm.value.trim() })
+    if (aliasTargetId.value !== targetId) {
+      return
+    }
+    aliasOptions.value = found.filter(option => option.id !== targetId && option.alias === null)
+  } catch {
+    aliasOptions.value = []
+  } finally {
+    if (aliasTargetId.value === targetId) {
+      aliasLoading.value = false
+    }
+  }
+}
+
+function focusAliasSearch(player: Player) {
+  if (aliasCloseTimer) {
+    clearTimeout(aliasCloseTimer)
+    aliasCloseTimer = null
+  }
+  if (aliasTargetId.value !== player.id) {
+    aliasTargetId.value = player.id
+    aliasTerm.value = ''
+    aliasOptions.value = []
+  }
+}
+
+function closeAliasSearch() {
+  if (aliasCloseTimer) {
+    clearTimeout(aliasCloseTimer)
+  }
+  aliasCloseTimer = setTimeout(() => {
+    aliasTargetId.value = null
+    aliasTerm.value = ''
+    aliasOptions.value = []
+    aliasCloseTimer = null
+  }, 150)
+}
+
+function selectAlias(player: Player, option: Player) {
+  const edit = edits[player.id]
+  if (!edit) {
+    return
+  }
+  edit.alias = {
+    id: option.id,
+    name: option.name,
+    displayName: option.displayName,
+    displayLabel: option.displayLabel
+  }
+  aliasTargetId.value = null
+  aliasTerm.value = ''
+  aliasOptions.value = []
 }
 
 watch(term, () => {
@@ -107,10 +265,23 @@ watch(term, () => {
   timer = setTimeout(load, 300)
 })
 
+watch(aliasTerm, () => {
+  if (aliasTimer) {
+    clearTimeout(aliasTimer)
+  }
+  aliasTimer = setTimeout(searchAliases, 350)
+})
+
 onMounted(load)
 onBeforeUnmount(() => {
   if (timer) {
     clearTimeout(timer)
+  }
+  if (aliasTimer) {
+    clearTimeout(aliasTimer)
+  }
+  if (aliasCloseTimer) {
+    clearTimeout(aliasCloseTimer)
   }
 })
 </script>
@@ -161,7 +332,7 @@ h1 {
 @media (min-width: 720px) {
   .row {
     grid-template-columns: minmax(160px, 1fr) 1fr 1fr auto;
-    align-items: end;
+    align-items: start;
   }
 }
 
@@ -180,6 +351,11 @@ h1 {
   font-size: 0.8rem;
 }
 
+.alias-hint {
+  color: var(--color-muted);
+  font-size: 0.75rem;
+}
+
 .field {
   display: flex;
   flex-direction: column;
@@ -195,6 +371,120 @@ h1 {
   border-radius: 6px;
   background: var(--color-bg);
   color: var(--color-text);
+}
+
+.alias-field {
+  position: relative;
+}
+
+.alias-search-wrap {
+  position: relative;
+}
+
+.alias-search-wrap input {
+  width: 100%;
+}
+
+.alias-status {
+  position: absolute;
+  right: 0.7rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-muted);
+  font-size: 0.8rem;
+}
+
+.alias-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 40px;
+  padding: 0.35rem 0.45rem 0.35rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.alias-chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip-remove {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.chip-remove:hover {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.suggestions {
+  position: absolute;
+  z-index: 20;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: 180px;
+  margin: 0.25rem 0 0;
+  padding: 0.25rem;
+  list-style: none;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg);
+  box-shadow: var(--shadow-strong);
+}
+
+.suggestions button {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.suggestions button:hover {
+  background: var(--color-primary-soft);
+}
+
+.suggest-name {
+  color: var(--color-muted);
+  font-size: 0.75rem;
+}
+
+.no-results {
+  position: absolute;
+  z-index: 20;
+  left: 0;
+  right: 0;
+  margin: 0.25rem 0 0;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg);
+  color: var(--color-muted);
+  font-size: 0.85rem;
 }
 
 .row-actions {

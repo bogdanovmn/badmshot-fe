@@ -51,6 +51,7 @@
 import { computed, inject, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { authStore } from '@/stores/auth'
+import { frameEffectsStore } from '@/stores/frameEffects'
 import { logout } from '@/logout'
 import { getBackendVersion } from '@/api'
 import { SsoService } from '@bogdanovmn/ssofw'
@@ -58,6 +59,7 @@ import { SsoService } from '@bogdanovmn/ssofw'
 const router = useRouter()
 const route = useRoute()
 const auth = authStore()
+const frameEffects = frameEffectsStore()
 const immersive = computed(() => route.path === '/' || route.path === '/explore')
 const ssoService = inject<SsoService>('ssoService')!
 const backendVersion = ref<string | null>(null)
@@ -66,6 +68,7 @@ const frontendVersion = import.meta.env.FRONTEND_VERSION
 onMounted(() => {
   auth.update()
   loadBackendVersion()
+  void frameEffects.ensureLoaded()
 })
 
 async function loadBackendVersion() {

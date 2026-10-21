@@ -7,6 +7,7 @@
     >
       <div v-if="!loaded" class="placeholder">Загрузка кадра...</div>
       <img
+        ref="frameImg"
         :src="url"
         :alt="altText"
         loading="lazy"
@@ -17,16 +18,17 @@
       <canvas
         ref="pixelCanvas"
         class="fx-pixel"
-        :class="{ visible: pixelate && pixelReady }"
+        :class="{ visible: pixelReady && (pixelate || transitionBoost > 0.001) }"
         :style="{ filter: imageFilter }"
         aria-hidden="true"
       ></canvas>
 
       <div v-if="halftone" class="fx-halftone" aria-hidden="true"></div>
+
       <div v-if="blur" class="fx-vignette" aria-hidden="true"></div>
       <div v-if="showMeta" class="bottom-scrim" aria-hidden="true"></div>
 
-      <div v-if="effects" class="fx-dock">
+      <div v-if="canConfigure" class="fx-dock">
         <button
           class="fx-btn"
           type="button"
@@ -47,45 +49,73 @@
             <line x1="17" y1="16" x2="23" y2="16" />
           </svg>
         </button>
+      </div>
 
-        <div v-if="effectsOpen" class="fx-controls">
-          <div class="fx-item">
-            <label class="fx-toggle">
-              <input v-model="halftone" type="checkbox" />
-              <span>Газетная сетка</span>
-            </label>
-            <label v-if="halftone" class="fx-slider">
-              <span>Сила <em>{{ halftoneStrength }}</em></span>
-              <input v-model.number="halftoneStrength" type="range" min="0" max="100" step="1" />
-            </label>
-          </div>
-
-          <div class="fx-item">
-            <label class="fx-toggle">
-              <input v-model="blur" type="checkbox" />
-              <span>Кино-размытие</span>
-            </label>
-            <label v-if="blur" class="fx-slider">
-              <span>Сила <em>{{ blurStrength }}</em></span>
-              <input v-model.number="blurStrength" type="range" min="0" max="100" step="1" />
-            </label>
-          </div>
-
-          <div class="fx-item">
-            <label class="fx-toggle">
-              <input v-model="pixelate" type="checkbox" />
-              <span>Ретро-пиксели</span>
-            </label>
-            <label v-if="pixelate" class="fx-slider">
-              <span>Пиксель <em>{{ pixelStrength }}</em></span>
-              <input v-model.number="pixelStrength" type="range" min="0" max="100" step="1" />
-            </label>
-            <label v-if="pixelate" class="fx-slider">
-              <span>Цвета <em>{{ pixelColors }}</em></span>
-              <input v-model.number="pixelColors" type="range" min="2" max="16" step="1" />
-            </label>
-          </div>
+      <div v-if="canConfigure && effectsOpen" class="fx-controls">
+        <div class="fx-item">
+          <label class="fx-toggle">
+            <input v-model="halftone" type="checkbox" />
+            <span>Газетная сетка</span>
+          </label>
+          <label v-if="halftone" class="fx-slider">
+            <span>Сила <em>{{ halftoneStrength }}</em></span>
+            <input v-model.number="halftoneStrength" type="range" min="0" max="100" step="1" />
+          </label>
         </div>
+
+        <div class="fx-item">
+          <label class="fx-toggle">
+            <input v-model="blur" type="checkbox" />
+            <span>Кино-размытие</span>
+          </label>
+          <label v-if="blur" class="fx-slider">
+            <span>Сила <em>{{ blurStrength }}</em></span>
+            <input v-model.number="blurStrength" type="range" min="0" max="100" step="1" />
+          </label>
+        </div>
+
+        <div class="fx-item">
+          <label class="fx-toggle">
+            <input v-model="pixelate" type="checkbox" />
+            <span>Ретро-пиксели</span>
+          </label>
+          <label v-if="pixelate" class="fx-slider">
+            <span>Пиксель <em>{{ pixelStrength }}</em></span>
+            <input v-model.number="pixelStrength" type="range" min="0" max="100" step="1" />
+          </label>
+          <label v-if="pixelate" class="fx-slider">
+            <span>Цвета <em>{{ pixelColors }}</em></span>
+            <input v-model.number="pixelColors" type="range" min="2" max="16" step="1" />
+          </label>
+        </div>
+
+        <div class="fx-item">
+          <label class="fx-toggle">
+            <input v-model="transitionEnabled" type="checkbox" />
+            <span>Пиксельный переход</span>
+          </label>
+          <template v-if="transitionEnabled">
+            <label class="fx-slider">
+              <span>Задержка <em>{{ transitionDuration }} мс</em></span>
+              <input v-model.number="transitionDuration" type="range" min="1000" max="8000" step="100" />
+            </label>
+            <label class="fx-slider">
+              <span>Пикселизация <em>{{ transitionPixels }}</em></span>
+              <input v-model.number="transitionPixels" type="range" min="0" max="100" step="1" />
+            </label>
+          </template>
+        </div>
+
+        <button
+          class="fx-save"
+          type="button"
+          :disabled="!settingsDirty || saveState === 'saving'"
+          @click="saveSettings"
+        >
+          {{ saveState === 'saving' ? 'Сохранение...' : 'Сохранить' }}
+        </button>
+
+        <p class="fx-hint fx-status">{{ saveStatusText }}</p>
       </div>
 
       <div v-if="showMeta" class="caption">
@@ -116,13 +146,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { CSSProperties } from 'vue'
-import type { ScreenshotCard } from '@/api'
+import type { FrameEffectSettings, ScreenshotCard } from '@/api'
 import { screenshotUrl } from '@/api'
 import { formatDateRu } from '@/common'
-
-const EFFECTS_STORAGE_KEY = 'badmshot.frameEffects.v2'
+import { DEFAULT_FRAME_EFFECTS, frameEffectsStore } from '@/stores/frameEffects'
+import { authStore } from '@/stores/auth'
 
 const BAYER = [
   [0, 8, 2, 10],
@@ -150,18 +180,50 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{ 'toggle-like': [] }>()
 
+const auth = authStore()
+const settingsStore = frameEffectsStore()
+
 const loaded = ref(false)
 const effectsOpen = ref(false)
-const halftone = ref(true)
-const halftoneStrength = ref(3)
-const blur = ref(true)
-const blurStrength = ref(0)
-const pixelate = ref(true)
-const pixelStrength = ref(0)
-const pixelColors = ref(10)
+const halftone = ref(DEFAULT_FRAME_EFFECTS.halftone)
+const halftoneStrength = ref(DEFAULT_FRAME_EFFECTS.halftoneStrength)
+const blur = ref(DEFAULT_FRAME_EFFECTS.blur)
+const blurStrength = ref(DEFAULT_FRAME_EFFECTS.blurStrength)
+const pixelate = ref(DEFAULT_FRAME_EFFECTS.pixelate)
+const pixelStrength = ref(DEFAULT_FRAME_EFFECTS.pixelStrength)
+const pixelColors = ref(DEFAULT_FRAME_EFFECTS.pixelColors)
 
+const transitionEnabled = ref(DEFAULT_FRAME_EFFECTS.transitionEnabled)
+const transitionDuration = ref(DEFAULT_FRAME_EFFECTS.transitionDuration)
+const transitionPixels = ref(DEFAULT_FRAME_EFFECTS.transitionPixels)
+
+const transitionBoost = ref(0)
+const saveState = ref<'idle' | 'saving' | 'saved' | 'error'>('idle')
+const settingsDirty = ref(false)
+
+const frameImg = ref<HTMLImageElement | null>(null)
 const pixelCanvas = ref<HTMLCanvasElement | null>(null)
 const pixelReady = ref(false)
+
+const canConfigure = computed(() => props.effects && auth.isAdmin)
+
+const saveStatusText = computed(() => {
+  if (saveState.value === 'saving') {
+    return 'Сохранение...'
+  }
+  if (saveState.value === 'saved') {
+    return 'Сохранено для всех пользователей'
+  }
+  if (saveState.value === 'error') {
+    return 'Не удалось сохранить настройки'
+  }
+  if (settingsDirty.value) {
+    return 'Есть несохранённые изменения'
+  }
+  return 'Настройки применяются ко всем пользователям'
+})
+
+let settingsReady = false
 
 const url = computed(() => screenshotUrl(props.card.id, props.full ? props.card.width : props.width))
 const altText = computed(() => props.card.players.join(', ') || 'Кадр из матча')
@@ -209,52 +271,52 @@ function formatDate(value: string): string {
   return formatDateRu(value)
 }
 
-function applyDefaults() {
-  halftone.value = true
-  halftoneStrength.value = 3
-  blur.value = true
-  blurStrength.value = 0
-  pixelate.value = true
-  pixelStrength.value = 0
-  pixelColors.value = 10
+function applySettings(settings: FrameEffectSettings) {
+  halftone.value = settings.halftone
+  halftoneStrength.value = settings.halftoneStrength
+  blur.value = settings.blur
+  blurStrength.value = settings.blurStrength
+  pixelate.value = settings.pixelate
+  pixelStrength.value = settings.pixelStrength
+  pixelColors.value = settings.pixelColors
+  transitionEnabled.value = settings.transitionEnabled
+  transitionDuration.value = settings.transitionDuration
+  transitionPixels.value = settings.transitionPixels
 }
 
-function loadEffects() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(EFFECTS_STORAGE_KEY) || 'null')
-    if (!saved) {
-      applyDefaults()
-      return
-    }
-    halftone.value = Boolean(saved.halftone)
-    halftoneStrength.value = numberOr(saved.halftoneStrength, 3)
-    blur.value = Boolean(saved.blur)
-    blurStrength.value = numberOr(saved.blurStrength, 0)
-    pixelate.value = Boolean(saved.pixelate)
-    pixelStrength.value = numberOr(saved.pixelStrength, 0)
-    pixelColors.value = numberOr(saved.pixelColors, 10)
-  } catch {
-    applyDefaults()
+function currentSettings(): FrameEffectSettings {
+  return {
+    halftone: halftone.value,
+    halftoneStrength: halftoneStrength.value,
+    blur: blur.value,
+    blurStrength: blurStrength.value,
+    pixelate: pixelate.value,
+    pixelStrength: pixelStrength.value,
+    pixelColors: pixelColors.value,
+    transitionEnabled: transitionEnabled.value,
+    transitionDuration: transitionDuration.value,
+    transitionPixels: transitionPixels.value
   }
 }
 
-function numberOr(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+async function loadSettings() {
+  const settings = await settingsStore.ensureLoaded()
+  applySettings(settings)
+  await nextTick()
+  settingsReady = true
 }
 
-function saveEffects() {
+async function saveSettings() {
+  if (!canConfigure.value || !settingsDirty.value || saveState.value === 'saving') {
+    return
+  }
+  saveState.value = 'saving'
   try {
-    localStorage.setItem(EFFECTS_STORAGE_KEY, JSON.stringify({
-      halftone: halftone.value,
-      halftoneStrength: halftoneStrength.value,
-      blur: blur.value,
-      blurStrength: blurStrength.value,
-      pixelate: pixelate.value,
-      pixelStrength: pixelStrength.value,
-      pixelColors: pixelColors.value
-    }))
+    await settingsStore.persist(currentSettings())
+    settingsDirty.value = false
+    saveState.value = 'saved'
   } catch {
-    // ignore storage errors
+    saveState.value = 'error'
   }
 }
 
@@ -262,6 +324,12 @@ let pixelSource: HTMLImageElement | null = null
 let pixelSourceUrl: string | null = null
 let sourceVersion = 0
 let renderTimer: ReturnType<typeof setTimeout> | null = null
+let renderBusy = false
+let renderQueued = false
+let lastRenderAt = 0
+let transitionRaf = 0
+
+const transitionRunning = ref(false)
 
 async function ensurePixelSource(): Promise<HTMLImageElement | null> {
   if (pixelSource && pixelSourceUrl === url.value) {
@@ -287,53 +355,105 @@ async function ensurePixelSource(): Promise<HTMLImageElement | null> {
   return image
 }
 
-async function renderPixelArt() {
-  if (!pixelate.value) {
-    pixelReady.value = false
-    return
+function basePixelBlock(): number {
+  return 1 + (clamp(pixelStrength.value, 0, 100) / 100) * 31
+}
+
+function currentPixelBlock(): number {
+  const base = pixelate.value ? basePixelBlock() : 1
+  if (transitionBoost.value <= 0.0001) {
+    return Math.max(1, Math.round(base))
+  }
+  const target = 1 + (clamp(transitionPixels.value, 0, 100) / 100) * 63
+  return Math.max(1, Math.round(base + (target - base) * transitionBoost.value))
+}
+
+function currentPixelColors(): number {
+  const base = Math.max(2, Math.round(pixelColors.value))
+  if (transitionBoost.value <= 0.0001) {
+    return base
+  }
+  const reduced = Math.round(base - (base - 2) * transitionBoost.value)
+  return Math.max(2, reduced)
+}
+
+async function drawPixelCanvas(
+  canvas: HTMLCanvasElement | null,
+  block: number,
+  colors: number,
+  dither = true
+): Promise<boolean> {
+  if (!canvas) {
+    return false
   }
   const source = await ensurePixelSource()
-  const canvas = pixelCanvas.value
-  if (!source || !canvas) {
-    return
+  if (!source) {
+    return false
   }
 
   const width = Math.max(1, props.card.width || source.naturalWidth)
   const height = Math.max(1, props.card.height || source.naturalHeight)
-  const block = Math.max(1, Math.round(1 + (clamp(pixelStrength.value, 0, 100) / 100) * 31))
-  const smallWidth = Math.max(1, Math.floor(width / block))
-  const smallHeight = Math.max(1, Math.floor(height / block))
+  const size = Math.max(1, Math.round(block))
+  const smallWidth = Math.max(1, Math.floor(width / size))
+  const smallHeight = Math.max(1, Math.floor(height / size))
 
   const small = document.createElement('canvas')
   small.width = smallWidth
   small.height = smallHeight
   const smallContext = small.getContext('2d', { willReadFrequently: true })
   if (!smallContext) {
-    return
+    return false
   }
   smallContext.imageSmoothingEnabled = true
   smallContext.drawImage(source, 0, 0, smallWidth, smallHeight)
 
-  let pixels: ImageData
-  try {
-    pixels = smallContext.getImageData(0, 0, smallWidth, smallHeight)
-  } catch {
-    pixelReady.value = false
-    return
+  if (dither) {
+    let pixels: ImageData
+    try {
+      pixels = smallContext.getImageData(0, 0, smallWidth, smallHeight)
+    } catch {
+      return false
+    }
+    applyDither(pixels, colors)
+    smallContext.putImageData(pixels, 0, 0)
   }
-  applyDither(pixels, pixelColors.value)
-  smallContext.putImageData(pixels, 0, 0)
 
   canvas.width = width
   canvas.height = height
   const context = canvas.getContext('2d')
   if (!context) {
-    return
+    return false
   }
   context.imageSmoothingEnabled = false
   context.clearRect(0, 0, width, height)
   context.drawImage(small, 0, 0, smallWidth, smallHeight, 0, 0, width, height)
-  pixelReady.value = true
+  return true
+}
+
+async function renderPixelArt() {
+  const active = pixelate.value || transitionBoost.value > 0.001
+  if (!active) {
+    pixelReady.value = false
+    return
+  }
+  const ok = await drawPixelCanvas(pixelCanvas.value, currentPixelBlock(), currentPixelColors(), pixelate.value)
+  pixelReady.value = ok
+}
+
+async function runRenderLoop() {
+  if (renderBusy) {
+    renderQueued = true
+    return
+  }
+  renderBusy = true
+  try {
+    do {
+      renderQueued = false
+      await renderPixelArt()
+    } while (renderQueued)
+  } finally {
+    renderBusy = false
+  }
 }
 
 function applyDither(image: ImageData, colors: number) {
@@ -361,22 +481,119 @@ function schedulePixelRender() {
     clearTimeout(renderTimer)
   }
   renderTimer = setTimeout(() => {
-    void renderPixelArt()
+    void runRenderLoop()
   }, 80)
+}
+
+function requestRender(minInterval = 55) {
+  const now = performance.now()
+  if (now - lastRenderAt < minInterval) {
+    return
+  }
+  lastRenderAt = now
+  void runRenderLoop()
 }
 
 function invalidatePixelSource() {
   sourceVersion++
   pixelSource = null
   pixelSourceUrl = null
-  pixelReady.value = false
 }
 
-watch(
-  [halftone, halftoneStrength, blur, blurStrength, pixelate, pixelStrength, pixelColors],
-  () => {
-    saveEffects()
+function animateTransition(from: number, to: number, duration: number): Promise<void> {
+  return new Promise(resolve => {
+    const started = performance.now()
+    const frame = (now: number) => {
+      const t = clamp((now - started) / duration, 0, 1)
+      const eased = t * t * (3 - 2 * t)
+      transitionBoost.value = from + (to - from) * eased
+      requestRender(33)
+      if (t < 1) {
+        transitionRaf = requestAnimationFrame(frame)
+      } else {
+        transitionRaf = 0
+        transitionBoost.value = to
+        resolve()
+      }
+    }
+    transitionRaf = requestAnimationFrame(frame)
+  })
+}
+
+function waitForFrameImage(timeoutMs: number): Promise<void> {
+  return new Promise(resolve => {
+    const image = frameImg.value
+    if (!image) {
+      resolve()
+      return
+    }
+    if (image.complete && image.naturalWidth > 0) {
+      resolve()
+      return
+    }
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const done = () => {
+      image.removeEventListener('load', done)
+      image.removeEventListener('error', done)
+      if (timer) {
+        clearTimeout(timer)
+      }
+      resolve()
+    }
+    image.addEventListener('load', done)
+    image.addEventListener('error', done)
+    timer = setTimeout(done, timeoutMs)
+  })
+}
+
+async function runTransition(swap: () => void | Promise<void>): Promise<void> {
+  if (!transitionEnabled.value || transitionRunning.value || clamp(transitionPixels.value, 0, 100) <= 0) {
+    await swap()
+    return
+  }
+  transitionRunning.value = true
+  const duration = clamp(Math.round(transitionDuration.value), 400, 15000)
+  const half = duration / 2
+  try {
+    await animateTransition(0, 1, half)
+    await swap()
+    await nextTick()
+    await waitForFrameImage(900)
+    await animateTransition(1, 0, half)
+  } finally {
+    transitionBoost.value = 0
+    transitionRunning.value = false
     if (pixelate.value) {
+      schedulePixelRender()
+    } else {
+      pixelReady.value = false
+    }
+  }
+}
+
+defineExpose({ runTransition })
+
+watch(
+  [
+    halftone,
+    halftoneStrength,
+    blur,
+    blurStrength,
+    pixelate,
+    pixelStrength,
+    pixelColors,
+    transitionEnabled,
+    transitionDuration,
+    transitionPixels
+  ],
+  () => {
+    if (settingsReady && canConfigure.value) {
+      settingsDirty.value = true
+      if (saveState.value !== 'saving') {
+        saveState.value = 'idle'
+      }
+    }
+    if (pixelate.value || transitionBoost.value > 0.001) {
       schedulePixelRender()
     } else {
       pixelReady.value = false
@@ -389,22 +606,32 @@ watch(
   () => {
     loaded.value = false
     invalidatePixelSource()
-    if (pixelate.value) {
+    if (pixelate.value || transitionBoost.value > 0.001) {
       schedulePixelRender()
+    } else {
+      pixelReady.value = false
     }
   }
 )
 
 onMounted(() => {
-  loadEffects()
+  applySettings(settingsStore.settings)
   if (pixelate.value) {
     schedulePixelRender()
   }
+  void loadSettings().then(() => {
+    if (pixelate.value) {
+      schedulePixelRender()
+    }
+  })
 })
 
 onBeforeUnmount(() => {
   if (renderTimer) {
     clearTimeout(renderTimer)
+  }
+  if (transitionRaf) {
+    cancelAnimationFrame(transitionRaf)
   }
   sourceVersion++
 })
@@ -458,16 +685,17 @@ onBeforeUnmount(() => {
 }
 
 .fx-pixel {
-  display: none;
   position: absolute;
   inset: 0;
   z-index: 0;
   pointer-events: none;
   image-rendering: pixelated;
+  opacity: 0;
+  transition: opacity 0.25s ease, filter 0.25s ease, transform 0.25s ease;
 }
 
 .fx-pixel.visible {
-  display: block;
+  opacity: 1;
 }
 
 .placeholder {
@@ -560,15 +788,47 @@ onBeforeUnmount(() => {
 }
 
 .fx-controls {
+  position: absolute;
+  top: calc(0.75rem + 44px + 0.45rem);
+  right: 0.75rem;
+  z-index: 4;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
   width: min(260px, calc(100vw - 1.5rem));
+  max-height: calc(50% - 7rem);
   padding: 0.6rem;
   border: 1px solid var(--overlay-divider);
   border-radius: 10px;
   background: var(--overlay-panel);
   backdrop-filter: blur(8px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.fx-save {
+  min-height: 34px;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--overlay-divider);
+  border-radius: 8px;
+  background: var(--text-primary);
+  color: var(--accent-dark);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.fx-save:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.fx-hint {
+  padding: 0 0.25rem;
+  color: var(--text-secondary);
+  font-size: 0.65rem;
+  line-height: 1.3;
 }
 
 .fx-item {
@@ -729,6 +989,11 @@ onBeforeUnmount(() => {
 
   .fx-dock {
     top: 1.25rem;
+    right: 2rem;
+  }
+
+  .fx-controls {
+    top: calc(1.25rem + 44px + 0.45rem);
     right: 2rem;
   }
 }

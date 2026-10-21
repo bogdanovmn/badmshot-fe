@@ -2,6 +2,7 @@
   <div class="explore">
     <ScreenshotFrame
       v-if="card"
+      ref="frameRef"
       :card="card"
       :width="1920"
       full
@@ -28,7 +29,7 @@
         <button
           class="slider-btn prev"
           type="button"
-          :disabled="!canPrev"
+          :disabled="!canPrev || transitioning"
           title="Предыдущий кадр"
           aria-label="Предыдущий кадр"
           @click="prev"
@@ -41,7 +42,7 @@
         <button
           class="slider-btn next"
           type="button"
-          :disabled="loading"
+          :disabled="loading || transitioning"
           title="Следующий кадр"
           aria-label="Следующий кадр"
           @click="next"
@@ -105,10 +106,12 @@ const router = useRouter()
 const selectedPlayers = ref<Player[]>([])
 const selectedClubs = ref<Club[]>([])
 
+const frameRef = ref<InstanceType<typeof ScreenshotFrame> | null>(null)
 const history = ref<ScreenshotCard[]>([])
 const historyIndex = ref(-1)
 const loading = ref(false)
 const liking = ref(false)
+const transitioning = ref(false)
 const filterOpen = ref(false)
 const error = ref<string | null>(null)
 const notice = ref<string | null>(null)
@@ -190,7 +193,7 @@ function filter(): ScreenshotFilter {
   }
 }
 
-async function next() {
+async function loadNext() {
   if (loading.value) {
     return
   }
@@ -215,9 +218,40 @@ async function next() {
   }
 }
 
-function prev() {
-  if (historyIndex.value > 0) {
-    historyIndex.value--
+async function next() {
+  if (loading.value || transitioning.value) {
+    return
+  }
+  transitioning.value = true
+  try {
+    if (frameRef.value) {
+      await frameRef.value.runTransition(loadNext)
+    } else {
+      await loadNext()
+    }
+  } finally {
+    transitioning.value = false
+  }
+}
+
+async function prev() {
+  if (transitioning.value || historyIndex.value <= 0) {
+    return
+  }
+  const swap = () => {
+    if (historyIndex.value > 0) {
+      historyIndex.value--
+    }
+  }
+  transitioning.value = true
+  try {
+    if (frameRef.value) {
+      await frameRef.value.runTransition(swap)
+    } else {
+      swap()
+    }
+  } finally {
+    transitioning.value = false
   }
 }
 
@@ -228,7 +262,7 @@ async function applyFilters(value: { players: Player[]; clubs: Club[] }) {
   history.value = []
   historyIndex.value = -1
   await syncQuery()
-  await next()
+  await loadNext()
 }
 
 async function toggleLike() {
@@ -272,7 +306,7 @@ watch(
     await loadSelection(playerIds, clubIds)
     history.value = []
     historyIndex.value = -1
-    await next()
+    await loadNext()
   }
 )
 
@@ -282,7 +316,7 @@ onMounted(async () => {
   if (playerIds.length || clubIds.length) {
     await loadSelection(playerIds, clubIds)
   }
-  await next()
+  await loadNext()
 })
 
 onBeforeUnmount(() => {

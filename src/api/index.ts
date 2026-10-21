@@ -4,6 +4,19 @@ export interface AppVersion {
   version: string
 }
 
+export interface FrameEffectSettings {
+  halftone: boolean
+  halftoneStrength: number
+  blur: boolean
+  blurStrength: number
+  pixelate: boolean
+  pixelStrength: number
+  pixelColors: number
+  transitionEnabled: boolean
+  transitionDuration: number
+  transitionPixels: number
+}
+
 export interface Club {
   id: string
   name: string
@@ -194,6 +207,14 @@ export interface MatchesQuery {
 
 export async function getBackendVersion(): Promise<AppVersion> {
   return makeApiRequest<AppVersion>('get', '/version')
+}
+
+export async function getFrameEffectSettings(): Promise<FrameEffectSettings> {
+  return makeApiRequest<FrameEffectSettings>('get', '/frame-effects')
+}
+
+export async function saveFrameEffectSettings(settings: FrameEffectSettings): Promise<void> {
+  await authApi.put('/frame-effects', settings)
 }
 
 export async function getRandomScreenshot(filter: ScreenshotFilter = {}): Promise<ScreenshotCard> {

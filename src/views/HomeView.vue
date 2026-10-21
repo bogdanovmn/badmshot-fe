@@ -2,6 +2,7 @@
   <div class="home">
     <ScreenshotFrame
       v-if="card"
+      ref="frameRef"
       :card="card"
       :width="1920"
       full
@@ -14,7 +15,7 @@
         <button
           class="slider-btn prev"
           type="button"
-          :disabled="!canPrev"
+          :disabled="!canPrev || transitioning"
           title="Предыдущий кадр"
           aria-label="Предыдущий кадр"
           @click="prev"
@@ -26,7 +27,7 @@
         <button
           class="slider-btn next"
           type="button"
-          :disabled="busy"
+          :disabled="busy || transitioning"
           title="Следующий кадр"
           aria-label="Следующий кадр"
           @click="next"
@@ -57,15 +58,17 @@ import ScreenshotFrame from '@/components/ScreenshotFrame.vue'
 
 const auth = authStore()
 
+const frameRef = ref<InstanceType<typeof ScreenshotFrame> | null>(null)
 const history = ref<ScreenshotCard[]>([])
 const historyIndex = ref(-1)
 const busy = ref(false)
+const transitioning = ref(false)
 const error = ref<string | null>(null)
 
 const card = computed<ScreenshotCard | null>(() => history.value[historyIndex.value] ?? null)
 const canPrev = computed(() => historyIndex.value > 0)
 
-async function next() {
+async function loadNext() {
   if (busy.value) {
     return
   }
@@ -90,9 +93,40 @@ async function next() {
   }
 }
 
-function prev() {
-  if (historyIndex.value > 0) {
-    historyIndex.value--
+async function next() {
+  if (busy.value || transitioning.value) {
+    return
+  }
+  transitioning.value = true
+  try {
+    if (frameRef.value) {
+      await frameRef.value.runTransition(loadNext)
+    } else {
+      await loadNext()
+    }
+  } finally {
+    transitioning.value = false
+  }
+}
+
+async function prev() {
+  if (transitioning.value || historyIndex.value <= 0) {
+    return
+  }
+  const swap = () => {
+    if (historyIndex.value > 0) {
+      historyIndex.value--
+    }
+  }
+  transitioning.value = true
+  try {
+    if (frameRef.value) {
+      await frameRef.value.runTransition(swap)
+    } else {
+      swap()
+    }
+  } finally {
+    transitioning.value = false
   }
 }
 
@@ -125,7 +159,7 @@ async function toggleLike() {
 
 onMounted(() => {
   auth.update()
-  void next()
+  void loadNext()
 })
 </script>
 

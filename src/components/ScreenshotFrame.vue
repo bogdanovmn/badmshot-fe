@@ -810,8 +810,8 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 64px;
+  height: 64px;
   padding: 0;
   border: 1px solid var(--overlay-divider);
   border-radius: 50%;
@@ -828,13 +828,13 @@ onBeforeUnmount(() => {
 }
 
 .fx-btn svg {
-  width: 20px;
-  height: 20px;
+  width: 34px;
+  height: 34px;
 }
 
 .fx-controls {
   position: absolute;
-  top: calc(0.75rem + 44px + 0.45rem);
+  top: calc(0.75rem + 64px + 0.45rem);
   right: 0.75rem;
   z-index: 4;
   display: flex;
@@ -1072,7 +1072,7 @@ onBeforeUnmount(() => {
   }
 
   .fx-controls {
-    top: calc(1.25rem + 44px + 0.45rem);
+    top: calc(1.25rem + 64px + 0.45rem);
     right: 2rem;
   }
 }

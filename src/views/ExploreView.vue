@@ -387,8 +387,8 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 64px;
+  height: 64px;
   padding: 0;
   border: 1px solid var(--overlay-divider);
   border-radius: 50%;
@@ -405,8 +405,8 @@ onBeforeUnmount(() => {
 }
 
 .overlay-icon svg {
-  width: 20px;
-  height: 20px;
+  width: 34px;
+  height: 34px;
 }
 
 .filter-btn {
@@ -443,8 +443,8 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 56px;
-  height: 56px;
+  width: 64px;
+  height: 64px;
   padding: 0;
   border: 1px solid var(--overlay-divider);
   border-radius: 50%;
@@ -466,8 +466,8 @@ onBeforeUnmount(() => {
 }
 
 .slider-btn svg {
-  width: 28px;
-  height: 28px;
+  width: 34px;
+  height: 34px;
 }
 
 .slider-btn.prev {
@@ -508,18 +508,6 @@ onBeforeUnmount(() => {
 
   .slider-btn.next {
     right: 2rem;
-  }
-}
-
-@media (max-width: 700px) {
-  .slider-btn {
-    width: 48px;
-    height: 48px;
-  }
-
-  .slider-btn svg {
-    width: 24px;
-    height: 24px;
   }
 }
 </style>

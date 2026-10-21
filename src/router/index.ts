@@ -40,6 +40,9 @@ router.beforeEach((to) => {
   const isAuthenticated = tokenStorage.defined()
   const targetRole = to.meta.allow as Role | undefined
 
+  if (to.path === '/' && isAuthenticated) {
+    return { path: '/explore' }
+  }
   if (targetRole && !tokenStorage.claims?.hasRole(targetRole, APP_ID)) {
     return { path: '/' }
   }

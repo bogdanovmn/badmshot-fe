@@ -37,7 +37,6 @@
                 <button type="button" @click="addPlayer(player)">{{ player.displayLabel }}</button>
               </li>
             </ul>
-            <p v-else-if="playerTerm && !playerLoading" class="no-results">Ничего не найдено</p>
           </section>
 
           <section class="filter-block">
@@ -110,22 +109,45 @@ const availableClubs = computed(() =>
 )
 
 let playerTimer: ReturnType<typeof setTimeout> | null = null
+let searchVersion = 0
+
+const MIN_SEARCH_LENGTH = 2
+const SEARCH_DEBOUNCE_MS = 400
+
+function clearPlayerSearch() {
+  searchVersion++
+  if (playerTimer) {
+    clearTimeout(playerTimer)
+    playerTimer = null
+  }
+  playerOptions.value = []
+  playerLoading.value = false
+}
 
 async function searchPlayers() {
-  if (!playerTerm.value.trim()) {
-    playerOptions.value = []
+  const term = playerTerm.value.trim()
+  if (term.length < MIN_SEARCH_LENGTH) {
+    clearPlayerSearch()
     return
   }
+  const version = ++searchVersion
   playerLoading.value = true
   try {
-    const found = await getPlayers({ term: playerTerm.value.trim() })
+    const found = await getPlayers({ term })
+    if (version !== searchVersion) {
+      return
+    }
     playerOptions.value = found.filter(
       option => !selectedPlayers.value.some(player => player.id === option.id)
     )
   } catch {
-    playerOptions.value = []
+    if (version === searchVersion) {
+      playerOptions.value = []
+    }
   } finally {
-    playerLoading.value = false
+    if (version === searchVersion) {
+      playerLoading.value = false
+    }
   }
 }
 
@@ -143,7 +165,7 @@ async function loadClubs() {
 function addPlayer(player: Player) {
   selectedPlayers.value = [...selectedPlayers.value, player]
   playerTerm.value = ''
-  playerOptions.value = []
+  clearPlayerSearch()
 }
 
 function removePlayer(id: string) {
@@ -167,7 +189,7 @@ function clear() {
   selectedPlayers.value = []
   selectedClubs.value = []
   playerTerm.value = ''
-  playerOptions.value = []
+  clearPlayerSearch()
 }
 
 function apply() {
@@ -183,11 +205,17 @@ function onKeydown(event: KeyboardEvent) {
   }
 }
 
-watch(playerTerm, () => {
+watch(playerTerm, term => {
   if (playerTimer) {
     clearTimeout(playerTimer)
+    playerTimer = null
   }
-  playerTimer = setTimeout(searchPlayers, 350)
+  if (term.trim().length < MIN_SEARCH_LENGTH) {
+    clearPlayerSearch()
+    return
+  }
+  searchVersion++
+  playerTimer = setTimeout(searchPlayers, SEARCH_DEBOUNCE_MS)
 })
 
 onMounted(() => {
@@ -365,11 +393,6 @@ onBeforeUnmount(() => {
 
 .suggestions button:hover {
   background: var(--color-primary-soft);
-}
-
-.no-results {
-  color: var(--color-muted);
-  font-size: 0.85rem;
 }
 
 .dialog-footer {

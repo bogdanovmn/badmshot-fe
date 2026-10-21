@@ -32,10 +32,19 @@ export const makeApiRequest = async <T>(
   params: Record<string, unknown> = {}
 ): Promise<T> => {
   try {
+    if (tokenStorage.defined()) {
+      return await authApi.makeRequest<T>({
+        method,
+        url,
+        ...(method === 'get' || method === 'delete'
+          ? { params }
+          : { data: params }
+        )
+      });
+    }
     const response: AxiosResponse<T> = await axios({
       method,
       url: `${apiUrl}${url}`,
-      headers: tokenStorage.defined() ? tokenStorage.header() : undefined,
       ...(method === 'get' || method === 'delete'
         ? { params }
         : { data: params }

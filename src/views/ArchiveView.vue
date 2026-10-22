@@ -3,7 +3,12 @@
     <div class="heading-row">
       <h1>Архив</h1>
       <div class="heading-links">
-        <router-link to="/archive/manage" class="link-btn">Управление</router-link>
+        <router-link v-if="capabilities?.indexEnabled" to="/archive/manage" class="link-btn">
+          Индексация
+        </router-link>
+        <router-link v-if="capabilities?.importEnabled" to="/archive/import" class="link-btn">
+          Импорт
+        </router-link>
         <router-link to="/archive/invalid" class="link-btn">Невалидные</router-link>
         <router-link to="/archive/stats" class="link-btn">Статистика</router-link>
         <router-link to="/catalog" class="link-btn">Справочники</router-link>
@@ -11,7 +16,7 @@
     </div>
 
     <div v-if="treeError" class="error">{{ treeError }}</div>
-    <div v-else-if="treeLoading" class="loading">Загрузка дерева...</div>
+    <div v-else-if="treeLoading" class="loading">Загружаем архив...</div>
     <div v-else class="tree">
       <div v-for="year in tree" :key="year.year" class="year">
         <div class="year-head">
@@ -37,16 +42,16 @@
       <div v-if="tree.length === 0" class="empty">Архив пуст. Запустите индексацию.</div>
     </div>
 
-    <section class="matches-section">
-      <div class="matches-head">
-        <div class="matches-title">
+    <section class="sessions-section">
+      <div class="sessions-head">
+        <div class="sessions-title">
           <h2>{{ periodTitle }}</h2>
           <span v-if="playerId" class="player-filter">
             Фильтр по игроку
             <button class="link-btn link-btn--small" @click="clearPlayerFilter">Сбросить</button>
           </span>
         </div>
-        <button class="link-btn" @click="selectMonth(null, null)">Все матчи</button>
+        <button class="link-btn" @click="selectMonth(null, null)">Последний месяц</button>
       </div>
 
       <div class="club-filter">
@@ -59,43 +64,61 @@
         </select>
       </div>
 
-      <div v-if="matchesError" class="error">{{ matchesError }}</div>
-      <div v-else-if="matchesLoading && page.items.length === 0" class="loading">Загрузка матчей...</div>
-      <div v-else-if="page.items.length === 0" class="empty">Матчей не найдено.</div>
-      <template v-else>
-        <div class="match-list">
-          <router-link
-            v-for="match in page.items"
-            :key="match.id"
-            class="match-card"
-            :class="{ invalid: !match.valid }"
-            :to="`/archive/matches/${match.id}`"
-          >
-            <div class="match-main">
-              <span class="match-name">{{ match.fileName }}</span>
-              <span class="match-players">{{ match.players.join(' · ') || '—' }}</span>
-              <span v-if="match.validationError" class="match-error">{{ match.validationError }}</span>
-            </div>
-            <div class="match-side">
-              <span v-if="match.matchDate" class="match-date">{{ match.matchDate }}</span>
-              <span v-if="match.clubName" class="match-club">{{ match.clubName }}</span>
-              <span class="match-size">{{ formatBytesHuman(match.sizeMbytes) }}</span>
-              <span v-if="match.durationSeconds" class="match-duration">{{ formatDurationHuman(match.durationSeconds) }}</span>
-            </div>
-          </router-link>
-        </div>
-        <div class="pager">
-          <span class="pager-info">Показано {{ page.items.length }} из {{ page.total }}</span>
-          <button
-            v-if="page.items.length < page.total"
-            class="btn-secondary"
-            :disabled="matchesLoading"
-            @click="loadMore"
-          >
-            Показать ещё
-          </button>
-        </div>
-      </template>
+      <div v-if="exportError" class="error">{{ exportError }}</div>
+      <div v-if="sessionsError" class="error">{{ sessionsError }}</div>
+      <div v-else-if="sessionsLoading && sessions.length === 0" class="loading">Загружаем сессии...</div>
+      <div v-else-if="sessions.length === 0" class="empty">Сессии за этот период не найдены.</div>
+      <div v-else class="session-list">
+        <details
+          v-for="session in sessions"
+          :key="session.id"
+          class="session"
+          :class="{ invalid: session.invalid > 0 }"
+        >
+          <summary class="session-head">
+            <span class="session-main">
+              <span class="session-date">{{ session.matchDate }}</span>
+              <span class="session-club">{{ session.clubName || session.club || '—' }}</span>
+              <span v-if="session.tournament" class="session-tournament">турнир</span>
+            </span>
+            <span class="session-meta">
+              <span>{{ session.matches }} матчей</span>
+              <span>{{ formatBytesHuman(session.sizeMbytes) }}</span>
+              <span v-if="session.durationSeconds">{{ formatDurationHuman(session.durationSeconds) }}</span>
+              <span v-if="session.invalid" class="session-invalid">{{ session.invalid }} невалидных</span>
+            </span>
+            <button
+              v-if="capabilities?.exportEnabled"
+              class="link-btn link-btn--small"
+              :disabled="exportingId === session.id || !session.exportable"
+              :title="exportTitle(session)"
+              @click.prevent.stop="download(session)"
+            >
+              {{ exportingId === session.id ? 'Экспорт...' : 'Экспорт' }}
+            </button>
+          </summary>
+
+          <div class="session-files">
+            <router-link
+              v-for="file in session.files"
+              :key="file.id"
+              class="file-row"
+              :class="{ invalid: file.validationError }"
+              :to="`/archive/matches/${file.id}`"
+            >
+              <span class="file-main">
+                <span class="file-players">{{ file.players.join(' / ') || 'Без игроков' }}</span>
+                <span v-if="file.validationError" class="file-error">{{ file.validationError }}</span>
+              </span>
+              <span class="file-meta">
+                <span>{{ formatBytesHuman(file.sizeMbytes) }}</span>
+                <span v-if="file.durationSeconds">{{ formatDurationHuman(file.durationSeconds) }}</span>
+                <span>{{ file.screenshots }} кадров</span>
+              </span>
+            </router-link>
+          </div>
+        </details>
+      </div>
     </section>
   </div>
 </template>
@@ -103,11 +126,20 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getArchiveTree, getClubs, getMatches } from '@/api'
-import type { ArchiveYear, Club, MatchPage } from '@/api'
+import {
+  exportSession,
+  getArchiveCapabilities,
+  getArchiveSessions,
+  getArchiveTree,
+  getClubs
+} from '@/api'
+import type {
+  ArchiveCapabilities,
+  ArchiveSession,
+  ArchiveYear,
+  Club
+} from '@/api'
 import { formatBytesHuman, formatDurationHuman, formatMonthRu } from '@/common'
-
-const LIMIT = 50
 
 const route = useRoute()
 const router = useRouter()
@@ -115,6 +147,7 @@ const router = useRouter()
 const tree = ref<ArchiveYear[]>([])
 const treeLoading = ref(true)
 const treeError = ref<string | null>(null)
+const capabilities = ref<ArchiveCapabilities | null>(null)
 
 const selectedYear = ref<number | null>(null)
 const selectedMonth = ref<number | null>(null)
@@ -122,9 +155,11 @@ const playerId = ref<string | null>(null)
 const club = ref<Club | null>(null)
 const clubs = ref<Club[]>([])
 
-const page = ref<MatchPage>({ total: 0, items: [] })
-const matchesLoading = ref(false)
-const matchesError = ref<string | null>(null)
+const sessions = ref<ArchiveSession[]>([])
+const sessionsLoading = ref(false)
+const sessionsError = ref<string | null>(null)
+const exportingId = ref<string | null>(null)
+const exportError = ref<string | null>(null)
 
 const periodTitle = computed(() => {
   if (selectedYear.value && selectedMonth.value) {
@@ -133,7 +168,7 @@ const periodTitle = computed(() => {
   if (selectedYear.value) {
     return `${selectedYear.value}`
   }
-  return 'Все матчи'
+  return 'Последний месяц'
 })
 
 function isSelected(year: number, month: number): boolean {
@@ -176,36 +211,47 @@ async function loadTree() {
   try {
     tree.value = await getArchiveTree()
   } catch (e) {
-    treeError.value = e instanceof Error ? e.message : 'Не удалось загрузить архив'
+    treeError.value = e instanceof Error ? e.message : 'Не удалось загрузить дерево архива'
   } finally {
     treeLoading.value = false
   }
 }
 
-async function loadMatches(offset = 0) {
-  matchesLoading.value = true
-  matchesError.value = null
+async function loadCapabilities() {
   try {
-    const result = await getMatches({
-      year: selectedYear.value ?? undefined,
-      month: selectedMonth.value ?? undefined,
-      clubId: club.value?.id,
-      playerId: playerId.value ?? undefined,
-      limit: LIMIT,
-      offset
-    })
-    page.value = offset === 0
-      ? result
-      : { total: result.total, items: [...page.value.items, ...result.items] }
-  } catch (e) {
-    matchesError.value = e instanceof Error ? e.message : 'Не удалось загрузить матчи'
-  } finally {
-    matchesLoading.value = false
+    capabilities.value = await getArchiveCapabilities()
+  } catch {
+    capabilities.value = {
+      exportEnabled: false,
+      importEnabled: false,
+      indexEnabled: false,
+      readOnly: true
+    }
   }
 }
 
-function loadMore() {
-  loadMatches(page.value.items.length)
+async function loadSessions() {
+  sessionsLoading.value = true
+  sessionsError.value = null
+  try {
+    const result = await getArchiveSessions({
+      year: selectedYear.value ?? undefined,
+      month: selectedMonth.value ?? undefined,
+      clubId: club.value?.id,
+      playerId: playerId.value ?? undefined
+    })
+    sessions.value = result.sessions
+    if (selectedYear.value === null && result.year) {
+      selectedYear.value = result.year
+    }
+    if (selectedMonth.value === null && result.month) {
+      selectedMonth.value = result.month
+    }
+  } catch (e) {
+    sessionsError.value = e instanceof Error ? e.message : 'Не удалось загрузить сессии'
+  } finally {
+    sessionsLoading.value = false
+  }
 }
 
 async function loadClubs() {
@@ -213,6 +259,34 @@ async function loadClubs() {
     clubs.value = await getClubs()
   } catch {
     clubs.value = []
+  }
+}
+
+function exportTitle(session: ArchiveSession): string {
+  if (!session.exportable) {
+    return 'Экспорт недоступен: есть невалидные матчи или нет кадров'
+  }
+  return `Скачать ${session.name}.zip`
+}
+
+async function download(session: ArchiveSession) {
+  if (exportingId.value) {
+    return
+  }
+  exportingId.value = session.id
+  exportError.value = null
+  try {
+    const blob = await exportSession(session.id)
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${session.name}.zip`
+    link.click()
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    exportError.value = e instanceof Error ? e.message : 'Не удалось экспортировать сессию'
+  } finally {
+    exportingId.value = null
   }
 }
 
@@ -229,32 +303,37 @@ watch(
     selectedMonth.value = month
     playerId.value = queryPlayerId
     if (changed) {
-      loadMatches(0)
+      loadSessions()
     }
   }
 )
 
-watch(club, () => loadMatches(0))
+watch(club, () => loadSessions())
 
 onMounted(async () => {
   const year = route.query.year ? Number(route.query.year) : null
   const month = route.query.month ? Number(route.query.month) : null
   playerId.value = typeof route.query.playerId === 'string' ? route.query.playerId : null
 
-  await Promise.all([loadTree(), loadClubs()])
+  await Promise.all([loadTree(), loadClubs(), loadCapabilities()])
 
   const latestYear = tree.value[0]
   const latestMonth = latestYear?.months[0]
   if (!year && !month && !playerId.value && latestMonth) {
     selectedYear.value = latestYear.year
     selectedMonth.value = latestMonth.month
-    await router.replace({ query: { year: String(latestYear.year), month: String(latestMonth.month) } })
+    await router.replace({
+      query: {
+        year: String(latestYear.year),
+        month: String(latestMonth.month)
+      }
+    })
   } else {
     selectedYear.value = year
     selectedMonth.value = month
   }
 
-  await loadMatches(0)
+  await loadSessions()
 })
 </script>
 
@@ -296,9 +375,20 @@ h1 {
   cursor: pointer;
 }
 
-.link-btn:hover {
+.link-btn:hover:not(:disabled) {
   background: var(--color-primary-soft);
   border-color: var(--color-primary);
+}
+
+.link-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.link-btn--small {
+  min-height: 28px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.8rem;
 }
 
 .tree {
@@ -373,13 +463,13 @@ h1 {
   color: var(--color-gold);
 }
 
-.matches-section {
+.sessions-section {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
 }
 
-.matches-head {
+.sessions-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -391,7 +481,7 @@ h2 {
   font-size: 1.15rem;
 }
 
-.matches-title {
+.sessions-title {
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -404,12 +494,6 @@ h2 {
   gap: 0.5rem;
   color: var(--color-muted);
   font-size: 0.85rem;
-}
-
-.link-btn--small {
-  min-height: 28px;
-  padding: 0.15rem 0.55rem;
-  font-size: 0.8rem;
 }
 
 .club-filter {
@@ -435,99 +519,128 @@ h2 {
   cursor: pointer;
 }
 
-.match-list {
+.session-list {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
 
-.match-card {
+.session {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+
+.session.invalid {
+  border-color: var(--color-danger);
+}
+
+.session-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem 0.9rem;
+  cursor: pointer;
+  flex-wrap: wrap;
+}
+
+.session-head::marker {
+  color: var(--color-muted);
+}
+
+.session-main {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.session-date {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.session-club {
+  overflow-wrap: anywhere;
+}
+
+.session-tournament {
+  padding: 0.05rem 0.4rem;
+  border-radius: 4px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.session-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--color-muted);
+  font-size: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.session-invalid {
+  color: var(--color-danger);
+}
+
+.session-files {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--color-border);
+}
+
+.file-row {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 1rem;
-  padding: 0.7rem 0.9rem;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-surface);
-  text-decoration: none;
+  padding: 0.55rem 0.9rem;
+  border-bottom: 1px solid var(--color-border);
   color: var(--color-text);
+  text-decoration: none;
 }
 
-.match-card:hover {
-  border-color: var(--color-primary);
+.file-row:last-child {
+  border-bottom: none;
 }
 
-.match-card.invalid {
-  border-color: var(--color-danger);
+.file-row:hover {
+  background: var(--color-primary-soft);
+}
+
+.file-row.invalid {
   background: var(--color-danger-soft);
 }
 
-.match-main {
+.file-main {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 0.15rem;
   min-width: 0;
 }
 
-.match-name {
+.file-players {
   font-weight: 600;
   overflow-wrap: anywhere;
 }
 
-.match-players {
-  color: var(--color-muted);
-  font-size: 0.85rem;
-}
-
-.match-error {
+.file-error {
   color: var(--color-danger);
   font-size: 0.8rem;
 }
 
-.match-side {
+.file-meta {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.15rem;
+  gap: 0.75rem;
   color: var(--color-muted);
   font-size: 0.8rem;
   white-space: nowrap;
-}
-
-.pager {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
   flex-wrap: wrap;
-}
-
-.pager-info {
-  color: var(--color-muted);
-  font-size: 0.85rem;
-}
-
-.btn-secondary {
-  min-height: 40px;
-  padding: 0.5rem 1.2rem;
-  border: 1px solid var(--btn-ghost-border);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-primary);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: var(--text-primary);
-  color: var(--accent-dark);
-  border-color: var(--text-primary);
-}
-
-.btn-secondary:disabled {
-  opacity: 0.6;
-  cursor: default;
+  justify-content: flex-end;
 }
 
 .loading,

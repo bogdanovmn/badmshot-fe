@@ -26,6 +26,7 @@ const router = createRouter({
     { path: '/sso-callback', component: () => import('@/views/SsoCallbackView.vue') },
     { path: '/archive', component: () => import('@/views/ArchiveView.vue'), meta: { allow: Role.admin } },
     { path: '/archive/manage', component: () => import('@/views/IndexJobView.vue'), meta: { allow: Role.admin } },
+    { path: '/archive/import', component: () => import('@/views/ImportView.vue'), meta: { allow: Role.admin } },
     { path: '/archive/index-job', redirect: '/archive/manage', meta: { allow: Role.admin } },
     { path: '/archive/invalid', component: () => import('@/views/ArchiveInvalidView.vue'), meta: { allow: Role.admin } },
     { path: '/archive/stats', component: () => import('@/views/ArchiveStatsView.vue'), meta: { allow: Role.admin } },

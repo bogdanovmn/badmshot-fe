@@ -139,6 +139,54 @@ export interface ArchiveYear {
   months: ArchiveMonth[]
 }
 
+export interface ArchiveSessionFile {
+  id: string
+  relPath: string
+  players: string[]
+  sizeMbytes: number
+  durationSeconds: number | null
+  screenshots: number
+  validationError: string | null
+}
+
+export interface ArchiveSession {
+  id: string
+  name: string
+  matchDate: string
+  year: number
+  month: number
+  clubId: string | null
+  club: string | null
+  clubName: string | null
+  tournament: boolean
+  matches: number
+  sizeMbytes: number
+  durationSeconds: number
+  invalid: number
+  exportable: boolean
+  files: ArchiveSessionFile[]
+}
+
+export interface ArchiveSessions {
+  year: number | null
+  month: number | null
+  sessions: ArchiveSession[]
+}
+
+export interface ArchiveCapabilities {
+  exportEnabled: boolean
+  importEnabled: boolean
+  indexEnabled: boolean
+  readOnly: boolean
+}
+
+export interface SessionsQuery {
+  year?: number
+  month?: number
+  clubId?: string
+  playerId?: string
+}
+
 export interface ArchiveMonthStat {
   month: number
   matches: number
@@ -341,6 +389,37 @@ export async function updateClub(id: string, displayName: string | null): Promis
 
 export async function getArchiveTree(): Promise<ArchiveYear[]> {
   return authApi.get<ArchiveYear[]>('/archive/tree')
+}
+
+export async function getArchiveCapabilities(): Promise<ArchiveCapabilities> {
+  return authApi.get<ArchiveCapabilities>('/archive/capabilities')
+}
+
+export async function getArchiveSessions(query: SessionsQuery = {}): Promise<ArchiveSessions> {
+  return authApi.get<ArchiveSessions>('/archive/sessions', query)
+}
+
+export async function exportSession(id: string): Promise<Blob> {
+  return authApi.makeRequest<Blob>({
+    method: 'GET',
+    url: `/archive/sessions/${id}/export`,
+    responseType: 'blob'
+  })
+}
+
+export async function startImportJob(file: File): Promise<JobResponse> {
+  const data = new FormData()
+  data.append('file', file)
+  return authApi.post<JobResponse>('/archive/import', data)
+}
+
+export async function getImportJob(): Promise<JobResponse | null> {
+  const response = await authApi.get<JobResponse | ''>('/archive/import')
+  return response || null
+}
+
+export async function cancelImportJob(): Promise<void> {
+  await authApi.delete('/archive/import')
 }
 
 export async function getMatches(query: MatchesQuery = {}): Promise<MatchPage> {

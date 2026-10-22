@@ -10,6 +10,10 @@
       Перезапись кадров удаляет все скриншоты из БД и создаёт их заново с текущими параметрами.
     </p>
 
+    <div v-if="capabilities && !capabilities.indexEnabled" class="empty">
+      Индексация отключена на этом сервере.
+    </div>
+
     <section class="options">
       <label class="field">
         <span>Кадров на матч</span>
@@ -48,10 +52,10 @@
     </section>
 
     <div class="actions">
-      <button class="btn-primary" :disabled="starting !== null || active" @click="start('META')">
+      <button class="btn-primary" :disabled="starting !== null || active || !capabilities?.indexEnabled" @click="start('META')">
         {{ starting === 'META' ? 'Запуск...' : 'Обновить метаинформацию' }}
       </button>
-      <button class="btn-secondary" :disabled="starting !== null || active" @click="start('SCREENSHOTS')">
+      <button class="btn-secondary" :disabled="starting !== null || active || !capabilities?.indexEnabled" @click="start('SCREENSHOTS')">
         {{ starting === 'SCREENSHOTS' ? 'Запуск...' : 'Перезаписать скриншоты' }}
       </button>
       <button class="btn-secondary" :disabled="cancelling || !active" @click="cancel">Отменить</button>
@@ -90,8 +94,8 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
-import { cancelIndexJob, getIndexJob, startIndexJob } from '@/api'
-import type { ArchiveJobMode, IndexOptions, JobResponse } from '@/api'
+import { cancelIndexJob, getArchiveCapabilities, getIndexJob, startIndexJob } from '@/api'
+import type { ArchiveCapabilities, ArchiveJobMode, IndexOptions, JobResponse } from '@/api'
 import BackButton from '@/components/BackButton.vue'
 import { formatElapsed } from '@/common'
 
@@ -105,6 +109,7 @@ const options = reactive<IndexOptions>({
   format: 'webp'
 })
 
+const capabilities = ref<ArchiveCapabilities | null>(null)
 const job = ref<JobResponse | null>(null)
 const loading = ref(true)
 const starting = ref<ArchiveJobMode | null>(null)
@@ -204,7 +209,19 @@ async function cancel() {
   }
 }
 
-onMounted(refresh)
+onMounted(async () => {
+  try {
+    capabilities.value = await getArchiveCapabilities()
+  } catch {
+    capabilities.value = {
+      exportEnabled: false,
+      importEnabled: false,
+      indexEnabled: false,
+      readOnly: true
+    }
+  }
+  await refresh()
+})
 onBeforeUnmount(() => {
   if (timer) {
     clearInterval(timer)

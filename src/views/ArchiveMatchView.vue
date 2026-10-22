@@ -21,7 +21,7 @@
         <div v-if="detail.match.validationError" class="validation">{{ detail.match.validationError }}</div>
       </section>
 
-      <section class="rename">
+      <section v-if="capabilities && !capabilities.readOnly" class="rename">
         <h2>Игроки (переименование файла)</h2>
         <div class="rename-rows">
           <div v-for="(player, index) in editPlayers" :key="index" class="rename-row">
@@ -67,8 +67,8 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { getMatch, renameMatch } from '@/api'
-import type { MatchDetail } from '@/api'
+import { getArchiveCapabilities, getMatch, renameMatch } from '@/api'
+import type { ArchiveCapabilities, MatchDetail } from '@/api'
 import BackButton from '@/components/BackButton.vue'
 import ScreenshotImage from '@/components/ScreenshotImage.vue'
 import { formatBytesHuman, formatDurationHuman, formatTimecode } from '@/common'
@@ -76,6 +76,7 @@ import { formatBytesHuman, formatDurationHuman, formatTimecode } from '@/common'
 const props = defineProps<{ id: string }>()
 
 const detail = ref<MatchDetail | null>(null)
+const capabilities = ref<ArchiveCapabilities | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
 
@@ -103,6 +104,19 @@ async function load() {
     error.value = e instanceof Error ? e.message : 'Не удалось загрузить матч'
   } finally {
     loading.value = false
+  }
+}
+
+async function loadCapabilities() {
+  try {
+    capabilities.value = await getArchiveCapabilities()
+  } catch {
+    capabilities.value = {
+      exportEnabled: false,
+      importEnabled: false,
+      indexEnabled: false,
+      readOnly: true
+    }
   }
 }
 
@@ -134,7 +148,9 @@ function openShot(id: string) {
   preview.value = id
 }
 
-onMounted(load)
+onMounted(async () => {
+  await Promise.all([load(), loadCapabilities()])
+})
 </script>
 
 <style scoped>

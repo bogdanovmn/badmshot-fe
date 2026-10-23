@@ -5,11 +5,23 @@
       <h1>Статистика архива</h1>
     </div>
 
-    <div v-if="error" class="error">{{ error }}</div>
+    <div class="tabs">
+      <button
+        v-for="tab in typeTabs"
+        :key="tab.key"
+        class="tab"
+        :class="{ active: archiveType === tab.key }"
+        @click="selectType(tab.key)"
+      >
+        {{ tab.label }}
+      </button>
+    </div>
+
+    <ErrorNotice v-if="error" :message="error" />
     <div v-else-if="loading" class="loading">Загрузка...</div>
     <div v-else-if="stats" class="content">
       <section class="summary">
-        <div class="card"><span class="value">{{ stats.matches }}</span><span class="caption">матчей</span></div>
+        <div class="card"><span class="value">{{ stats.matches }}</span><span class="caption">{{ unitLabel }}</span></div>
         <div class="card"><span class="value">{{ formatBytesHuman(stats.sizeMbytes) }}</span><span class="caption">объём</span></div>
         <div class="card"><span class="value">{{ formatDurationHuman(stats.durationSeconds) }}</span><span class="caption">продолжительность</span></div>
         <div class="card"><span class="value">{{ stats.screenshotCount }}</span><span class="caption">кадров</span></div>
@@ -20,7 +32,7 @@
         <h2>По годам и месяцам</h2>
         <table class="stats-table">
           <thead>
-            <tr><th>Период</th><th class="num">Матчей</th><th class="num">Размер</th><th class="num">Длительность</th></tr>
+            <tr><th>Период</th><th class="num">{{ unitTitle }}</th><th class="num">Размер</th><th class="num">Длительность</th></tr>
           </thead>
           <tbody>
             <template v-for="year in stats.years" :key="year.year">
@@ -41,11 +53,11 @@
         </table>
       </section>
 
-      <section>
+      <section v-if="archiveType === 'GAMES'">
         <h2>По клубам</h2>
         <table class="stats-table">
           <thead>
-            <tr><th>Клуб</th><th class="num">Матчей</th><th class="num">Размер</th><th class="num">Длительность</th></tr>
+            <tr><th>Клуб</th><th class="num">{{ unitTitle }}</th><th class="num">Размер</th><th class="num">Длительность</th></tr>
           </thead>
           <tbody>
             <tr v-for="club in stats.clubs" :key="club.id">
@@ -62,7 +74,7 @@
         <h2>По игрокам</h2>
         <table class="stats-table">
           <thead>
-            <tr><th>Игрок</th><th class="num">Матчей</th><th class="num">Размер</th><th class="num">Длительность</th></tr>
+            <tr><th>Игрок</th><th class="num">{{ unitTitle }}</th><th class="num">Размер</th><th class="num">Длительность</th></tr>
           </thead>
           <tbody>
             <tr v-for="player in stats.players" :key="player.id">
@@ -81,25 +93,47 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { getArchiveStats } from '@/api'
-import type { ArchiveStats } from '@/api'
+import { computed, onMounted, ref } from 'vue'
+import { getArchiveStats, getErrorMessage } from '@/api'
+import type { ArchiveStats, ArchiveType } from '@/api'
 import BackButton from '@/components/BackButton.vue'
+import ErrorNotice from '@/components/ErrorNotice.vue'
 import { formatBytesHuman, formatDurationHuman, formatMonthRu } from '@/common'
 
 const stats = ref<ArchiveStats | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
+const archiveType = ref<ArchiveType>('GAMES')
 
-onMounted(async () => {
+const typeTabs: { key: ArchiveType; label: string }[] = [
+  { key: 'GAMES', label: 'Игры' },
+  { key: 'INDI', label: 'Индивидуальные' }
+]
+
+const unitLabel = computed(() => archiveType.value === 'INDI' ? 'тренировок' : 'матчей')
+const unitTitle = computed(() => archiveType.value === 'INDI' ? 'Тренировок' : 'Матчей')
+
+async function load() {
+  loading.value = true
+  error.value = null
   try {
-    stats.value = await getArchiveStats()
+    stats.value = await getArchiveStats(archiveType.value)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Не удалось загрузить статистику'
+    error.value = getErrorMessage(e, 'Не удалось загрузить статистику')
   } finally {
     loading.value = false
   }
-})
+}
+
+function selectType(type: ArchiveType) {
+  if (type === archiveType.value) {
+    return
+  }
+  archiveType.value = type
+  load()
+}
+
+onMounted(load)
 </script>
 
 <style scoped>
@@ -122,6 +156,33 @@ h1 {
 h2 {
   font-size: 1.1rem;
   margin-bottom: 0.5rem;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.tab {
+  min-height: 38px;
+  padding: 0.4rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tab:hover {
+  border-color: var(--color-primary);
+}
+
+.tab.active {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
 }
 
 .content {

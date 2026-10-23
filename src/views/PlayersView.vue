@@ -7,7 +7,7 @@
 
     <input v-model="term" class="search" type="text" placeholder="Поиск игрока..." />
 
-    <div v-if="error" class="error">{{ error }}</div>
+    <ErrorNotice v-if="error" :message="error" />
     <div v-else-if="loading" class="loading">Загрузка...</div>
     <div v-else-if="players.length === 0" class="empty">Игроки не найдены.</div>
     <div v-else class="list">
@@ -75,8 +75,9 @@
 
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { getPlayers, updatePlayer } from '@/api'
+import { getErrorMessage, getPlayers, updatePlayer } from '@/api'
 import type { Player, PlayerAlias } from '@/api'
+import ErrorNotice from '@/components/ErrorNotice.vue'
 
 defineProps<{ embedded?: boolean }>()
 
@@ -123,7 +124,7 @@ async function load() {
       }
     })
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Не удалось загрузить игроков'
+    error.value = getErrorMessage(e, 'Не удалось загрузить игроков')
   } finally {
     loading.value = false
   }
@@ -183,7 +184,7 @@ async function save(player: Player) {
     players.value = [...players.value].sort(comparePlayers)
     savedId.value = player.id
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Не удалось сохранить игрока'
+    error.value = getErrorMessage(e, 'Не удалось сохранить игрока')
   } finally {
     savingId.value = null
   }

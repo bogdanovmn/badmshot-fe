@@ -12,7 +12,19 @@
       </p>
     </div>
 
-    <div v-if="error" class="error">{{ error }}</div>
+    <div class="tabs">
+      <button
+        v-for="tab in typeTabs"
+        :key="tab.key"
+        class="tab"
+        :class="{ active: archiveType === tab.key }"
+        @click="selectType(tab.key)"
+      >
+        {{ tab.label }}
+      </button>
+    </div>
+
+    <ErrorNotice v-if="error" :message="error" />
     <div v-else-if="loading" class="loading">Загрузка...</div>
 
     <template v-else>
@@ -61,8 +73,9 @@
 import { computed, onMounted, ref } from 'vue'
 import type { CSSProperties } from 'vue'
 import { useRouter } from 'vue-router'
-import { getClubTags, getPlayerTags } from '@/api'
-import type { CatalogTag } from '@/api'
+import { getClubTags, getErrorMessage, getPlayerTags } from '@/api'
+import type { ArchiveType, CatalogTag } from '@/api'
+import ErrorNotice from '@/components/ErrorNotice.vue'
 import { authStore } from '@/stores/auth'
 
 const router = useRouter()
@@ -71,6 +84,12 @@ const playerTags = ref<CatalogTag[]>([])
 const clubTags = ref<CatalogTag[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
+const archiveType = ref<ArchiveType>('GAMES')
+
+const typeTabs: { key: ArchiveType; label: string }[] = [
+  { key: 'GAMES', label: 'Игры' },
+  { key: 'INDI', label: 'Индивидуальные' }
+]
 
 const playerMax = computed(() => Math.max(1, ...playerTags.value.map(tag => tag.matches)))
 const clubMax = computed(() => Math.max(1, ...clubTags.value.map(tag => tag.matches)))
@@ -87,7 +106,11 @@ function open(kind: 'players' | 'clubs', tag: CatalogTag) {
   if (!auth.isAuthenticated) {
     return
   }
-  router.push({ path: '/explore', query: { [kind]: tag.id } })
+  const query: Record<string, string> = { [kind]: tag.id }
+  if (archiveType.value === 'INDI') {
+    query.indi = '1'
+  }
+  router.push({ path: '/explore', query })
 }
 
 function sorted(tags: CatalogTag[]): CatalogTag[] {
@@ -98,14 +121,25 @@ async function load() {
   loading.value = true
   error.value = null
   try {
-    const [players, clubs] = await Promise.all([getPlayerTags(), getClubTags()])
+    const [players, clubs] = await Promise.all([
+      getPlayerTags(archiveType.value),
+      getClubTags(archiveType.value)
+    ])
     playerTags.value = sorted(players)
     clubTags.value = sorted(clubs)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Не удалось загрузить тэги'
+    error.value = getErrorMessage(e, 'Не удалось загрузить тэги')
   } finally {
     loading.value = false
   }
+}
+
+function selectType(type: ArchiveType) {
+  if (type === archiveType.value) {
+    return
+  }
+  archiveType.value = type
+  load()
 }
 
 onMounted(() => {
@@ -133,6 +167,33 @@ onMounted(() => {
 .hint {
   color: var(--color-muted);
   font-size: 0.9rem;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.tab {
+  min-height: 38px;
+  padding: 0.4rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tab:hover {
+  border-color: var(--color-primary);
+}
+
+.tab.active {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
 }
 
 .cloud-section {

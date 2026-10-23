@@ -67,6 +67,13 @@
               </option>
             </select>
           </section>
+
+          <section class="filter-block">
+            <label class="toggle">
+              <input v-model="showIndi" type="checkbox" />
+              <span>Показывать индивидуальные тренировки</span>
+            </label>
+          </section>
         </div>
 
         <footer class="dialog-footer">
@@ -86,15 +93,17 @@ import type { Club, Player } from '@/api'
 const props = defineProps<{
   players: Player[]
   clubs: Club[]
+  includeIndi: boolean
 }>()
 
 const emit = defineEmits<{
   close: []
-  apply: [value: { players: Player[]; clubs: Club[] }]
+  apply: [value: { players: Player[]; clubs: Club[]; includeIndi: boolean }]
 }>()
 
 const selectedPlayers = ref<Player[]>([...props.players])
 const selectedClubs = ref<Club[]>([...props.clubs])
+const showIndi = ref(props.includeIndi)
 
 const playerTerm = ref('')
 const playerOptions = ref<Player[]>([])
@@ -188,6 +197,7 @@ function removeClub(id: string) {
 function clear() {
   selectedPlayers.value = []
   selectedClubs.value = []
+  showIndi.value = false
   playerTerm.value = ''
   clearPlayerSearch()
 }
@@ -195,7 +205,8 @@ function clear() {
 function apply() {
   emit('apply', {
     players: [...selectedPlayers.value],
-    clubs: [...selectedClubs.value]
+    clubs: [...selectedClubs.value],
+    includeIndi: showIndi.value
   })
 }
 
@@ -309,6 +320,20 @@ onBeforeUnmount(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.toggle input {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
 }
 
 .chip {

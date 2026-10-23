@@ -5,7 +5,7 @@
       <h1>Невалидные файлы</h1>
     </div>
 
-    <div v-if="error" class="error">{{ error }}</div>
+    <ErrorNotice v-if="error" :message="error" />
     <div v-else-if="loading && page.items.length === 0" class="loading">Загрузка...</div>
     <div v-else-if="page.items.length === 0" class="empty">Невалидных файлов нет.</div>
     <template v-else>
@@ -33,9 +33,10 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { getInvalidMatches } from '@/api'
+import { getErrorMessage, getInvalidMatches } from '@/api'
 import type { MatchPage } from '@/api'
 import BackButton from '@/components/BackButton.vue'
+import ErrorNotice from '@/components/ErrorNotice.vue'
 
 const LIMIT = 50
 
@@ -52,7 +53,7 @@ async function load(offset = 0) {
       ? result
       : { total: result.total, items: [...page.value.items, ...result.items] }
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Не удалось загрузить список'
+    error.value = getErrorMessage(e, 'Не удалось загрузить список')
   } finally {
     loading.value = false
   }

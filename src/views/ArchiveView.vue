@@ -15,14 +15,26 @@
       </div>
     </div>
 
-    <div v-if="treeError" class="error">{{ treeError }}</div>
+    <div class="tabs">
+      <button
+        v-for="tab in typeTabs"
+        :key="tab.key"
+        class="tab"
+        :class="{ active: archiveType === tab.key }"
+        @click="selectType(tab.key)"
+      >
+        {{ tab.label }}
+      </button>
+    </div>
+
+    <ErrorNotice v-if="treeError" :message="treeError" />
     <div v-else-if="treeLoading" class="loading">Загружаем архив...</div>
     <div v-else class="tree">
       <div v-for="year in tree" :key="year.year" class="year">
         <div class="year-head">
           <span class="year-title">{{ year.year }}</span>
           <span class="year-meta">
-            {{ year.matches }} матчей<template v-if="year.invalid"> · {{ year.invalid }} невалидных</template>
+            {{ year.matches }} {{ unitLabel }}<template v-if="year.invalid"> · {{ year.invalid }} невалидных</template>
           </span>
         </div>
         <div class="months">
@@ -54,7 +66,7 @@
         <button class="link-btn" @click="selectMonth(null, null)">Последний месяц</button>
       </div>
 
-      <div class="club-filter">
+      <div v-if="archiveType === 'GAMES'" class="club-filter">
         <label class="filter-label" for="archive-club">Клуб</label>
         <select id="archive-club" class="search" :value="club?.id ?? ''" @change="pickClubFromSelect">
           <option value="">Все клубы</option>
@@ -64,8 +76,8 @@
         </select>
       </div>
 
-      <div v-if="exportError" class="error">{{ exportError }}</div>
-      <div v-if="sessionsError" class="error">{{ sessionsError }}</div>
+      <ErrorNotice v-if="exportError" :message="exportError" />
+      <ErrorNotice v-if="sessionsError" :message="sessionsError" />
       <div v-else-if="sessionsLoading && sessions.length === 0" class="loading">Загружаем сессии...</div>
       <div v-else-if="sessions.length === 0" class="empty">Сессии за этот период не найдены.</div>
       <div v-else class="session-list">
@@ -77,12 +89,12 @@
         >
           <summary class="session-head">
             <span class="session-main">
-              <span class="session-date">{{ session.matchDate }}</span>
-              <span class="session-club">{{ session.clubName || session.club || '—' }}</span>
+              <span class="session-date">{{ sessionDateLabel(session) }}</span>
+              <span class="session-club">{{ sessionTitle(session) }}</span>
               <span v-if="session.tournament" class="session-tournament">турнир</span>
             </span>
             <span class="session-meta">
-              <span>{{ session.matches }} матчей</span>
+              <span>{{ session.matches }} {{ unitLabel }}</span>
               <span>{{ formatBytesHuman(session.sizeMbytes) }}</span>
               <span v-if="session.durationSeconds">{{ formatDurationHuman(session.durationSeconds) }}</span>
               <span v-if="session.invalid" class="session-invalid">{{ session.invalid }} невалидных</span>
@@ -131,23 +143,35 @@ import {
   getArchiveCapabilities,
   getArchiveSessions,
   getArchiveTree,
-  getClubs
+  getClubs,
+  getErrorMessage
 } from '@/api'
 import type {
   ArchiveCapabilities,
   ArchiveSession,
+  ArchiveType,
   ArchiveYear,
   Club
 } from '@/api'
 import { formatBytesHuman, formatDurationHuman, formatMonthRu } from '@/common'
+import ErrorNotice from '@/components/ErrorNotice.vue'
 
 const route = useRoute()
 const router = useRouter()
 
 const tree = ref<ArchiveYear[]>([])
+const treeType = ref<ArchiveType | null>(null)
 const treeLoading = ref(true)
 const treeError = ref<string | null>(null)
 const capabilities = ref<ArchiveCapabilities | null>(null)
+const archiveType = ref<ArchiveType>('GAMES')
+
+const typeTabs: { key: ArchiveType; label: string }[] = [
+  { key: 'GAMES', label: 'Игры' },
+  { key: 'INDI', label: 'Индивидуальные' }
+]
+
+const unitLabel = computed(() => archiveType.value === 'INDI' ? 'тренировок' : 'матчей')
 
 const selectedYear = ref<number | null>(null)
 const selectedMonth = ref<number | null>(null)
@@ -175,10 +199,15 @@ function isSelected(year: number, month: number): boolean {
   return selectedYear.value === year && selectedMonth.value === month
 }
 
-function selectMonth(year: number | null, month: number | null) {
-  const query: Record<string, string> = {}
-  if (playerId.value) {
-    query.playerId = playerId.value
+function parseType(value: unknown): ArchiveType {
+  return value === 'INDI' ? 'INDI' : 'GAMES'
+}
+
+function queryFor(year: number | null, month: number | null, player?: string | null, type?: ArchiveType) {
+  const query: Record<string, string> = { type: type ?? archiveType.value }
+  const targetPlayer = player === undefined ? playerId.value : player
+  if (targetPlayer) {
+    query.playerId = targetPlayer
   }
   if (year) {
     query.year = String(year)
@@ -186,18 +215,22 @@ function selectMonth(year: number | null, month: number | null) {
       query.month = String(month)
     }
   }
-  router.replace({ query })
+  return query
+}
+
+function selectType(type: ArchiveType) {
+  if (type === archiveType.value) {
+    return
+  }
+  router.replace({ query: { type } })
+}
+
+function selectMonth(year: number | null, month: number | null) {
+  router.replace({ query: queryFor(year, month) })
 }
 
 function clearPlayerFilter() {
-  const query: Record<string, string> = {}
-  if (selectedYear.value) {
-    query.year = String(selectedYear.value)
-    if (selectedMonth.value) {
-      query.month = String(selectedMonth.value)
-    }
-  }
-  router.replace({ query })
+  router.replace({ query: queryFor(selectedYear.value, selectedMonth.value, null) })
 }
 
 function pickClubFromSelect(event: Event) {
@@ -206,12 +239,14 @@ function pickClubFromSelect(event: Event) {
 }
 
 async function loadTree() {
+  const type = archiveType.value
   treeLoading.value = true
   treeError.value = null
   try {
-    tree.value = await getArchiveTree()
+    tree.value = await getArchiveTree(type)
+    treeType.value = type
   } catch (e) {
-    treeError.value = e instanceof Error ? e.message : 'Не удалось загрузить дерево архива'
+    treeError.value = getErrorMessage(e, 'Не удалось загрузить дерево архива')
   } finally {
     treeLoading.value = false
   }
@@ -237,8 +272,9 @@ async function loadSessions() {
     const result = await getArchiveSessions({
       year: selectedYear.value ?? undefined,
       month: selectedMonth.value ?? undefined,
-      clubId: club.value?.id,
-      playerId: playerId.value ?? undefined
+      clubId: archiveType.value === 'GAMES' ? club.value?.id : undefined,
+      playerId: playerId.value ?? undefined,
+      type: archiveType.value
     })
     sessions.value = result.sessions
     if (selectedYear.value === null && result.year) {
@@ -248,7 +284,7 @@ async function loadSessions() {
       selectedMonth.value = result.month
     }
   } catch (e) {
-    sessionsError.value = e instanceof Error ? e.message : 'Не удалось загрузить сессии'
+    sessionsError.value = getErrorMessage(e, 'Не удалось загрузить сессии')
   } finally {
     sessionsLoading.value = false
   }
@@ -256,10 +292,24 @@ async function loadSessions() {
 
 async function loadClubs() {
   try {
-    clubs.value = await getClubs()
+    clubs.value = archiveType.value === 'GAMES' ? await getClubs() : []
   } catch {
     clubs.value = []
   }
+}
+
+function sessionDateLabel(session: ArchiveSession): string {
+  if (session.type === 'INDI') {
+    return `${formatMonthRu(session.month)} ${session.year}`
+  }
+  return session.matchDate
+}
+
+function sessionTitle(session: ArchiveSession): string {
+  if (session.type === 'INDI') {
+    return 'Индивидуальные тренировки'
+  }
+  return session.clubName || session.club || '—'
 }
 
 function exportTitle(session: ArchiveSession): string {
@@ -284,56 +334,62 @@ async function download(session: ArchiveSession) {
     link.click()
     URL.revokeObjectURL(url)
   } catch (e) {
-    exportError.value = e instanceof Error ? e.message : 'Не удалось экспортировать сессию'
+    exportError.value = getErrorMessage(e, 'Не удалось экспортировать сессию')
   } finally {
     exportingId.value = null
   }
 }
 
-watch(
-  () => route.query,
-  query => {
-    const year = query.year ? Number(query.year) : null
-    const month = query.month ? Number(query.month) : null
-    const queryPlayerId = typeof query.playerId === 'string' ? query.playerId : null
-    const changed = year !== selectedYear.value
-      || month !== selectedMonth.value
-      || queryPlayerId !== playerId.value
-    selectedYear.value = year
-    selectedMonth.value = month
-    playerId.value = queryPlayerId
-    if (changed) {
-      loadSessions()
+async function applyRouteQuery() {
+  const query = route.query
+  const type = parseType(query.type)
+  const typeChanged = type !== archiveType.value
+  archiveType.value = type
+
+  if (typeChanged || treeType.value !== type) {
+    await loadTree()
+    if (type === 'GAMES') {
+      await loadClubs()
+    } else {
+      clubs.value = []
+      club.value = null
     }
   }
-)
+
+  const year = query.year ? Number(query.year) : null
+  const month = query.month ? Number(query.month) : null
+  const queryPlayerId = typeof query.playerId === 'string' ? query.playerId : null
+  const changed = typeChanged
+    || year !== selectedYear.value
+    || month !== selectedMonth.value
+    || queryPlayerId !== playerId.value
+  selectedYear.value = year
+  selectedMonth.value = month
+  playerId.value = queryPlayerId
+
+  if (!year && !month) {
+    const latestYear = tree.value[0]
+    const latestMonth = latestYear?.months[0]
+    if (latestMonth) {
+      await router.replace({
+        query: queryFor(latestYear.year, latestMonth.month, queryPlayerId, type)
+      })
+      return
+    }
+  }
+
+  if (changed) {
+    await loadSessions()
+  }
+}
+
+watch(() => route.query, applyRouteQuery, { deep: true })
 
 watch(club, () => loadSessions())
 
 onMounted(async () => {
-  const year = route.query.year ? Number(route.query.year) : null
-  const month = route.query.month ? Number(route.query.month) : null
-  playerId.value = typeof route.query.playerId === 'string' ? route.query.playerId : null
-
-  await Promise.all([loadTree(), loadClubs(), loadCapabilities()])
-
-  const latestYear = tree.value[0]
-  const latestMonth = latestYear?.months[0]
-  if (!year && !month && !playerId.value && latestMonth) {
-    selectedYear.value = latestYear.year
-    selectedMonth.value = latestMonth.month
-    await router.replace({
-      query: {
-        year: String(latestYear.year),
-        month: String(latestMonth.month)
-      }
-    })
-  } else {
-    selectedYear.value = year
-    selectedMonth.value = month
-  }
-
-  await loadSessions()
+  await loadCapabilities()
+  await applyRouteQuery()
 })
 </script>
 
@@ -389,6 +445,33 @@ h1 {
   min-height: 28px;
   padding: 0.15rem 0.55rem;
   font-size: 0.8rem;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.tab {
+  min-height: 38px;
+  padding: 0.4rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tab:hover {
+  border-color: var(--color-primary);
+}
+
+.tab.active {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
 }
 
 .tree {

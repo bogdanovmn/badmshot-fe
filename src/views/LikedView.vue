@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <h1>Любимые кадры</h1>
-    <div v-if="error" class="error">{{ error }}</div>
+    <ErrorNotice v-if="error" :message="error" />
     <div v-else-if="loading" class="loading">Загрузка...</div>
     <div v-else-if="cards.length === 0" class="empty">
       Вы ещё не добавили ни одного кадра в любимые.
@@ -22,8 +22,9 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { getLikedScreenshots, unlikeScreenshot } from '@/api'
+import { getErrorMessage, getLikedScreenshots, unlikeScreenshot } from '@/api'
 import type { ScreenshotCard } from '@/api'
+import ErrorNotice from '@/components/ErrorNotice.vue'
 import ScreenshotFrame from '@/components/ScreenshotFrame.vue'
 
 const cards = ref<ScreenshotCard[]>([])
@@ -37,7 +38,7 @@ async function load() {
   try {
     cards.value = await getLikedScreenshots()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Не удалось загрузить любимые кадры'
+    error.value = getErrorMessage(e, 'Не удалось загрузить любимые кадры')
   } finally {
     loading.value = false
   }
@@ -52,7 +53,7 @@ async function unlike(card: ScreenshotCard) {
     await unlikeScreenshot(card.id)
     cards.value = cards.value.filter(item => item.id !== card.id)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Не удалось убрать лайк'
+    error.value = getErrorMessage(e, 'Не удалось убрать лайк')
   } finally {
     busyId.value = null
   }

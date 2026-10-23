@@ -2,18 +2,23 @@
   <div class="page">
     <div class="heading-row">
       <BackButton fallback="/archive" />
-      <h1>Матч</h1>
+      <h1>{{ pageTitle }}</h1>
     </div>
 
-    <div v-if="error" class="error">{{ error }}</div>
+    <ErrorNotice v-if="error" :message="error" />
     <div v-else-if="loading" class="loading">Загрузка...</div>
     <div v-else-if="detail" class="content">
       <section class="info">
         <div class="path">{{ detail.match.relPath }}</div>
         <div class="info-grid">
+          <div class="info-item"><span class="label">Тип</span><span>{{ typeLabel }}</span></div>
           <div class="info-item"><span class="label">Дата</span><span>{{ detail.match.matchDate || '—' }}</span></div>
-          <div class="info-item"><span class="label">Клуб</span><span>{{ detail.match.clubName || '—' }}</span></div>
-          <div class="info-item"><span class="label">Турнир</span><span>{{ detail.match.tournament ? 'да' : 'нет' }}</span></div>
+          <div v-if="detail.match.type === 'GAMES'" class="info-item">
+            <span class="label">Клуб</span><span>{{ detail.match.clubName || '—' }}</span>
+          </div>
+          <div v-if="detail.match.type === 'GAMES'" class="info-item">
+            <span class="label">Турнир</span><span>{{ detail.match.tournament ? 'да' : 'нет' }}</span>
+          </div>
           <div class="info-item"><span class="label">Длительность</span><span>{{ formatDurationHuman(detail.match.durationSeconds) }}</span></div>
           <div class="info-item"><span class="label">Размер</span><span>{{ formatBytesHuman(detail.match.sizeMbytes) }}</span></div>
           <div class="info-item"><span class="label">Кадров</span><span>{{ detail.screenshots.length }}</span></div>
@@ -26,10 +31,30 @@
         <div class="rename-rows">
           <div v-for="(player, index) in editPlayers" :key="index" class="rename-row">
             <input v-model="editPlayers[index]" class="rename-input" type="text" />
+            <button
+              v-if="isIndi && editPlayers.length > 1"
+              class="btn-secondary btn-remove"
+              :disabled="saving"
+              @click="removePlayer(index)"
+            >
+              Удалить
+            </button>
           </div>
         </div>
+        <div v-if="isIndi" class="rename-actions">
+          <button
+            class="btn-secondary"
+            :disabled="saving || editPlayers.length >= 2"
+            @click="addPlayer"
+          >
+            Добавить игрока
+          </button>
+        </div>
+        <div v-if="isIndi && !renameValid" class="hint">
+          Укажите одного игрока misha или двух игроков.
+        </div>
         <div class="rename-actions">
-          <button class="btn-primary" :disabled="saving || !renameChanged" @click="save">
+          <button class="btn-primary" :disabled="saving || !renameChanged || !renameValid" @click="save">
             {{ saving ? 'Сохранение...' : 'Сохранить' }}
           </button>
           <button class="btn-secondary" :disabled="saving" @click="resetEdit">Сбросить</button>
@@ -67,9 +92,10 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { getArchiveCapabilities, getMatch, renameMatch } from '@/api'
+import { getArchiveCapabilities, getErrorMessage, getMatch, renameMatch } from '@/api'
 import type { ArchiveCapabilities, MatchDetail } from '@/api'
 import BackButton from '@/components/BackButton.vue'
+import ErrorNotice from '@/components/ErrorNotice.vue'
 import ScreenshotImage from '@/components/ScreenshotImage.vue'
 import { formatBytesHuman, formatDurationHuman, formatTimecode } from '@/common'
 
@@ -79,6 +105,14 @@ const detail = ref<MatchDetail | null>(null)
 const capabilities = ref<ArchiveCapabilities | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
+
+const isIndi = computed(() => detail.value?.match.type === 'INDI')
+
+const typeLabel = computed(() => isIndi.value
+  ? 'Индивидуальная тренировка'
+  : 'Игровой матч')
+
+const pageTitle = computed(() => isIndi.value ? 'Тренировка' : 'Матч')
 
 const editPlayers = ref<string[]>([])
 const saving = ref(false)
@@ -94,6 +128,14 @@ const renameChanged = computed(() => {
     || editPlayers.value.some((name, index) => name !== original[index])
 })
 
+const renameValid = computed(() => {
+  if (!isIndi.value) {
+    return true
+  }
+  return editPlayers.value.length === 2
+    || (editPlayers.value.length === 1 && editPlayers.value[0]?.trim() === 'misha')
+})
+
 async function load() {
   loading.value = true
   error.value = null
@@ -101,7 +143,7 @@ async function load() {
     detail.value = await getMatch(props.id)
     editPlayers.value = detail.value.players.map(player => player.name)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Не удалось загрузить матч'
+    error.value = getErrorMessage(e, 'Не удалось загрузить матч')
   } finally {
     loading.value = false
   }
@@ -126,6 +168,16 @@ function resetEdit() {
   }
 }
 
+function addPlayer() {
+  if (editPlayers.value.length < 2) {
+    editPlayers.value.push('')
+  }
+}
+
+function removePlayer(index: number) {
+  editPlayers.value.splice(index, 1)
+}
+
 async function save() {
   if (saving.value) {
     return
@@ -138,7 +190,7 @@ async function save() {
     await load()
     success.value = true
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Не удалось переименовать файл'
+    error.value = getErrorMessage(e, 'Не удалось переименовать файл')
   } finally {
     saving.value = false
   }
@@ -225,6 +277,23 @@ h2 {
   flex-direction: column;
   gap: 0.5rem;
   max-width: 420px;
+}
+
+.rename-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.btn-remove {
+  flex-shrink: 0;
+  min-height: 40px;
+}
+
+.hint {
+  margin-top: 0.5rem;
+  color: var(--color-muted);
+  font-size: 0.85rem;
 }
 
 .rename-input {

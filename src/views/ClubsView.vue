@@ -3,7 +3,7 @@
     <h1 v-if="!embedded">Клубы</h1>
     <p class="hint">Название из имени файла остаётся техническим идентификатором. Здесь задаётся имя для отображения.</p>
 
-    <div v-if="error" class="error">{{ error }}</div>
+    <ErrorNotice v-if="error" :message="error" />
     <div v-else-if="loading" class="loading">Загрузка...</div>
     <div v-else-if="clubs.length === 0" class="empty">Клубы не найдены.</div>
     <div v-else class="list">
@@ -29,8 +29,9 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
-import { getAdminClubs, updateClub } from '@/api'
+import { getAdminClubs, getErrorMessage, updateClub } from '@/api'
 import type { Club } from '@/api'
+import ErrorNotice from '@/components/ErrorNotice.vue'
 
 defineProps<{ embedded?: boolean }>()
 
@@ -52,7 +53,7 @@ async function load() {
       }
     })
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Не удалось загрузить клубы'
+    error.value = getErrorMessage(e, 'Не удалось загрузить клубы')
   } finally {
     loading.value = false
   }
@@ -80,7 +81,7 @@ async function save(club: Club) {
     club.displayLabel = edit.displayName || club.name
     savedId.value = club.id
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Не удалось сохранить клуб'
+    error.value = getErrorMessage(e, 'Не удалось сохранить клуб')
   } finally {
     savingId.value = null
   }

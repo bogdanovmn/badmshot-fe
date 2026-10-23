@@ -34,7 +34,7 @@
       </button>
     </div>
 
-    <div v-if="error && !optionsOpen" class="error">{{ error }}</div>
+    <ErrorNotice v-if="error && !optionsOpen" :message="error" />
 
     <section v-if="job" class="status">
       <div class="status-head">
@@ -131,7 +131,7 @@
               </label>
             </section>
 
-            <div v-if="error" class="error dialog-error">{{ error }}</div>
+            <ErrorNotice v-if="error" :message="error" />
           </div>
 
           <footer class="dialog-footer">
@@ -163,6 +163,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import {
   cancelIndexJob,
   getArchiveCapabilities,
+  getErrorMessage,
   getIndexDefaults,
   getIndexJob,
   startIndexJob
@@ -176,6 +177,7 @@ import type {
   ScreenshotFormat
 } from '@/api'
 import BackButton from '@/components/BackButton.vue'
+import ErrorNotice from '@/components/ErrorNotice.vue'
 import { formatElapsed, formatFileSize } from '@/common'
 
 interface ScreenshotOptionsForm {
@@ -260,7 +262,7 @@ async function refresh() {
   try {
     job.value = await getIndexJob()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Не удалось получить статус задачи'
+    error.value = getErrorMessage(e, 'Не удалось получить статус задачи')
   } finally {
     loading.value = false
   }
@@ -315,7 +317,7 @@ async function start(mode: ArchiveJobMode) {
     }
     schedule()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Не удалось запустить задачу'
+    error.value = getErrorMessage(e, 'Не удалось запустить задачу')
   } finally {
     starting.value = null
   }
@@ -328,7 +330,7 @@ async function cancel() {
     await cancelIndexJob()
     await refresh()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Не удалось отменить задачу'
+    error.value = getErrorMessage(e, 'Не удалось отменить задачу')
   } finally {
     cancelling.value = false
   }
@@ -339,7 +341,7 @@ async function loadDefaults() {
     defaults.value = await getIndexDefaults()
     resetOptions()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Не удалось получить параметры нарезки'
+    error.value = getErrorMessage(e, 'Не удалось получить параметры нарезки')
   }
 }
 

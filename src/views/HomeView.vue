@@ -63,7 +63,7 @@
 
     <div v-else class="stage">
       <div v-if="busy" class="stage-text">Загрузка кадра...</div>
-      <div v-else-if="error" class="stage-text stage-error">{{ error }}</div>
+      <ErrorNotice v-else-if="error" :message="error" class="stage-error-notice" />
       <button v-else class="stage-cta" type="button" @click="next">Показать кадр</button>
     </div>
 
@@ -76,6 +76,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { authStore } from '@/stores/auth'
 import {
+  getErrorMessage,
   getRandomScreenshot,
   getTeaserScreenshots,
   likeScreenshot,
@@ -83,6 +84,7 @@ import {
   unlikeScreenshot
 } from '@/api'
 import type { ScreenshotCard } from '@/api'
+import ErrorNotice from '@/components/ErrorNotice.vue'
 import ScreenshotFrame from '@/components/ScreenshotFrame.vue'
 
 const auth = authStore()
@@ -112,7 +114,7 @@ async function loadTeaser() {
       error.value = 'Кадры не найдены'
     }
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Не удалось загрузить кадры'
+    error.value = getErrorMessage(e, 'Не удалось загрузить кадры')
   } finally {
     busy.value = false
   }
@@ -133,7 +135,7 @@ async function loadNext() {
     history.value = [...history.value, nextCard]
     historyIndex.value = history.value.length - 1
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Не удалось загрузить кадр'
+    error.value = getErrorMessage(e, 'Не удалось загрузить кадр')
   } finally {
     busy.value = false
   }
@@ -209,7 +211,7 @@ async function toggleLike() {
     }
   } catch (e) {
     history.value[index] = current
-    error.value = e instanceof Error ? e.message : 'Не удалось изменить лайк'
+    error.value = getErrorMessage(e, 'Не удалось изменить лайк')
   } finally {
     busy.value = false
   }
@@ -259,10 +261,8 @@ onMounted(() => {
   font-size: 0.95rem;
 }
 
-.stage-error {
-  color: var(--color-danger);
-  padding: 0 1rem;
-  text-align: center;
+.stage-error-notice {
+  max-width: min(90%, 480px);
 }
 
 .stage-cta {

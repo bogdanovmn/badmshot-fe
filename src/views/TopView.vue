@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <h1>ТОП кадров</h1>
-    <div v-if="error" class="error">{{ error }}</div>
+    <ErrorNotice v-if="error" :message="error" />
     <div v-else-if="loading" class="loading">Загрузка...</div>
     <div v-else-if="cards.length === 0" class="empty">Пока нет пролайканных кадров.</div>
     <div v-else class="grid">
@@ -17,8 +17,9 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { getTopScreenshots } from '@/api'
+import { getErrorMessage, getTopScreenshots } from '@/api'
 import type { ScreenshotCard } from '@/api'
+import ErrorNotice from '@/components/ErrorNotice.vue'
 import ScreenshotFrame from '@/components/ScreenshotFrame.vue'
 
 const cards = ref<ScreenshotCard[]>([])
@@ -31,7 +32,7 @@ async function load() {
   try {
     cards.value = await getTopScreenshots()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Не удалось загрузить ТОП'
+    error.value = getErrorMessage(e, 'Не удалось загрузить ТОП')
   } finally {
     loading.value = false
   }

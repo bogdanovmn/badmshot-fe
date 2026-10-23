@@ -29,7 +29,7 @@
       </div>
     </section>
 
-    <div v-if="error" class="error">{{ error }}</div>
+    <ErrorNotice v-if="error" :message="error" />
 
     <section v-if="job" class="status">
       <div class="status-head">
@@ -70,7 +70,7 @@
         <span v-if="historyLoading" class="muted">Загрузка...</span>
       </div>
 
-      <div v-if="historyError" class="error">{{ historyError }}</div>
+      <ErrorNotice v-if="historyError" :message="historyError" />
       <div v-if="historyLoading" class="empty">Загрузка...</div>
       <div v-else-if="history.length === 0" class="empty">Импортов ещё не было.</div>
       <div v-else class="table-wrap">
@@ -120,12 +120,14 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import {
   cancelImportJob,
   getArchiveCapabilities,
+  getErrorMessage,
   getImportJob,
   getImportJobs,
   startImportJob
 } from '@/api'
 import type { ArchiveCapabilities, JobResponse } from '@/api'
 import BackButton from '@/components/BackButton.vue'
+import ErrorNotice from '@/components/ErrorNotice.vue'
 import { formatElapsed, formatFileSize } from '@/common'
 
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -219,7 +221,7 @@ async function loadHistory() {
     history.value = await getImportJobs()
     historyError.value = null
   } catch (e) {
-    historyError.value = e instanceof Error ? e.message : 'Не удалось получить историю импортов'
+    historyError.value = getErrorMessage(e, 'Не удалось получить историю импортов')
   } finally {
     historyLoading.value = false
   }
@@ -229,7 +231,7 @@ async function refresh() {
   try {
     job.value = await getImportJob()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Не удалось получить статус импорта'
+    error.value = getErrorMessage(e, 'Не удалось получить статус импорта')
   } finally {
     loading.value = false
   }
@@ -262,7 +264,7 @@ async function start() {
     await loadHistory()
     schedule()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Не удалось запустить импорт'
+    error.value = getErrorMessage(e, 'Не удалось запустить импорт')
   } finally {
     starting.value = false
   }
@@ -275,7 +277,7 @@ async function cancel() {
     await cancelImportJob()
     await refresh()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Не удалось отменить импорт'
+    error.value = getErrorMessage(e, 'Не удалось отменить импорт')
   } finally {
     cancelling.value = false
   }

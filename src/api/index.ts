@@ -1,5 +1,5 @@
 import { tokenStorage } from '@bogdanovmn/ssofw'
-import { apiBaseUrl, authApi, makeApiRequest } from './common'
+import { apiBaseUrl, authApi, getErrorMessage, makeApiRequest } from './common'
 
 export interface AppVersion {
   version: string
@@ -61,9 +61,12 @@ export interface ScreenshotCard {
   views: number
 }
 
+export type ArchiveType = 'GAMES' | 'INDI'
+
 export interface ScreenshotFilter {
   players?: string[]
   clubs?: string[]
+  indi?: boolean
 }
 
 export interface CatalogTag {
@@ -84,6 +87,7 @@ export interface Screenshot {
 
 export interface MatchBrief {
   id: string
+  type: ArchiveType
   relPath: string
   year: number | null
   month: number | null
@@ -101,6 +105,7 @@ export interface MatchBrief {
 
 export interface Match {
   id: string
+  type: ArchiveType
   relPath: string
   year: number | null
   month: number | null
@@ -151,6 +156,7 @@ export interface ArchiveSessionFile {
 
 export interface ArchiveSession {
   id: string
+  type: ArchiveType
   name: string
   matchDate: string
   year: number
@@ -185,6 +191,7 @@ export interface SessionsQuery {
   month?: number
   clubId?: string
   playerId?: string
+  type?: ArchiveType
 }
 
 export interface ArchiveMonthStat {
@@ -274,6 +281,7 @@ export interface MatchesQuery {
   clubId?: string
   playerId?: string
   invalid?: boolean
+  type?: ArchiveType
   limit?: number
   offset?: number
 }
@@ -381,12 +389,12 @@ export async function getClubsByIds(ids: string[]): Promise<Club[]> {
   return makeApiRequest<Club[]>('get', '/filters/clubs/by-ids', { ids })
 }
 
-export async function getPlayerTags(): Promise<CatalogTag[]> {
-  return makeApiRequest<CatalogTag[]>('get', '/tags/players')
+export async function getPlayerTags(type: ArchiveType = 'GAMES'): Promise<CatalogTag[]> {
+  return makeApiRequest<CatalogTag[]>('get', '/tags/players', { type })
 }
 
-export async function getClubTags(): Promise<CatalogTag[]> {
-  return makeApiRequest<CatalogTag[]>('get', '/tags/clubs')
+export async function getClubTags(type: ArchiveType = 'GAMES'): Promise<CatalogTag[]> {
+  return makeApiRequest<CatalogTag[]>('get', '/tags/clubs', { type })
 }
 
 export async function updatePlayer(
@@ -404,8 +412,8 @@ export async function updateClub(id: string, displayName: string | null): Promis
   await authApi.put(`/clubs/${id}`, { displayName })
 }
 
-export async function getArchiveTree(): Promise<ArchiveYear[]> {
-  return authApi.get<ArchiveYear[]>('/archive/tree')
+export async function getArchiveTree(type: ArchiveType = 'GAMES'): Promise<ArchiveYear[]> {
+  return authApi.get<ArchiveYear[]>('/archive/tree', { type })
 }
 
 export async function getArchiveCapabilities(): Promise<ArchiveCapabilities> {
@@ -459,8 +467,8 @@ export async function renameMatch(id: string, players: string[]): Promise<MatchB
   return authApi.post<MatchBrief>(`/archive/matches/${id}/rename`, { players })
 }
 
-export async function getArchiveStats(): Promise<ArchiveStats> {
-  return authApi.get<ArchiveStats>('/archive/stats')
+export async function getArchiveStats(type: ArchiveType = 'GAMES'): Promise<ArchiveStats> {
+  return authApi.get<ArchiveStats>('/archive/stats', { type })
 }
 
 export async function getIndexJob(): Promise<JobResponse | null> {
@@ -484,4 +492,14 @@ export function isRateLimited(error: unknown): boolean {
   return error instanceof Error && /"code":\s*429/.test(error.message)
 }
 
-export { apiBaseUrl, authApi, makeApiRequest }
+export function isNotFound(error: unknown): boolean {
+  if (error instanceof Error) {
+    return /"code":\s*404/.test(error.message)
+  }
+  return typeof error === 'object'
+    && error !== null
+    && 'status' in error
+    && Number((error as { status: unknown }).status) === 404
+}
+
+export { apiBaseUrl, authApi, getErrorMessage, makeApiRequest }

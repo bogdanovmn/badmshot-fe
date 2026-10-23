@@ -10,7 +10,7 @@ const router = createRouter({
   routes: [
     { path: '/', component: HomeView },
     { path: '/top', component: () => import('@/views/TopView.vue'), meta: { private: true } },
-    { path: '/tags', component: () => import('@/views/TagsView.vue'), meta: { private: true } },
+    { path: '/stats', alias: '/tags', component: () => import('@/views/TagsView.vue'), meta: { private: true } },
     { path: '/explore', component: () => import('@/views/ExploreView.vue'), meta: { private: true } },
     { path: '/liked', component: () => import('@/views/LikedView.vue'), meta: { private: true } },
     { path: '/faq', component: () => import('@/views/FaqView.vue') },

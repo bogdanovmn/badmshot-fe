@@ -1,21 +1,49 @@
 <template>
   <div id="app" :class="{ 'app--immersive': immersive }">
-    <nav class="navbar">
-      <div class="nav-brand">
-        <router-link to="/">Badm Shot</router-link>
+    <nav ref="navRef" class="navbar">
+      <div class="nav-left">
+        <button
+          v-if="auth.isAuthenticated"
+          class="icon-btn menu-toggle"
+          :title="menuOpen ? 'Закрыть меню' : 'Меню'"
+          :aria-label="menuOpen ? 'Закрыть меню' : 'Меню'"
+          :aria-expanded="menuOpen"
+          @click="menuOpen = !menuOpen"
+        >
+          <NavIcon :name="menuOpen ? 'close' : 'menu'" />
+        </button>
+        <div class="nav-brand">
+          <router-link to="/">Badm Shot</router-link>
+        </div>
       </div>
-      <div class="nav-links">
+      <div v-if="menuOpen" class="nav-dropdown">
+        <router-link
+          v-for="item in navItems"
+          :key="item.to"
+          :to="item.to"
+          class="nav-dropdown-link"
+          @click="menuOpen = false"
+        >
+          <NavIcon :name="item.icon" />
+          <span>{{ item.label }}</span>
+        </router-link>
+      </div>
+      <div class="nav-actions">
         <template v-if="auth.isAuthenticated">
-          <router-link to="/top">ТОП</router-link>
-          <router-link to="/tags">Тэги</router-link>
-          <router-link to="/explore">Кадры</router-link>
-          <router-link to="/liked">Любимые</router-link>
-        </template>
-        <template v-if="auth.isAdmin">
-          <router-link to="/archive">Архив</router-link>
-        </template>
-        <template v-if="auth.isAuthenticated">
+          <div class="nav-icons">
+            <router-link
+              v-for="item in navItems"
+              :key="item.to"
+              :to="item.to"
+              class="nav-icon-link"
+              :title="item.label"
+              :aria-label="item.label"
+            >
+              <NavIcon :name="item.icon" />
+            </router-link>
+          </div>
           <router-link v-if="auth.userName" to="/liked" class="user-name full" :title="auth.userName">{{ auth.userName }}</router-link>
+          <router-link v-if="auth.userName" to="/liked" class="user-name short" :title="auth.userName">{{ initials(auth.userName) }}</router-link>
           <button class="icon-btn" title="Выйти" aria-label="Выйти" @click="handleLogout">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
@@ -48,13 +76,22 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, onMounted, ref } from 'vue'
+import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { authStore } from '@/stores/auth'
 import { frameEffectsStore } from '@/stores/frameEffects'
 import { logout } from '@/logout'
 import { getBackendVersion } from '@/api'
 import { SsoService } from '@bogdanovmn/ssofw'
+import NavIcon from '@/components/NavIcon.vue'
+
+type NavIconName = 'top' | 'stats' | 'explore' | 'liked' | 'archive'
+
+interface NavItem {
+  to: string
+  label: string
+  icon: NavIconName
+}
 
 const router = useRouter()
 const route = useRoute()
@@ -64,11 +101,68 @@ const immersive = computed(() => route.path === '/' || route.path === '/explore'
 const ssoService = inject<SsoService>('ssoService')!
 const backendVersion = ref<string | null>(null)
 const frontendVersion = import.meta.env.FRONTEND_VERSION
+const menuOpen = ref(false)
+const navRef = ref<HTMLElement | null>(null)
+
+const navItems = computed<NavItem[]>(() => {
+  const items: NavItem[] = [
+    { to: '/top', label: 'ТОП', icon: 'top' },
+    { to: '/stats', label: 'Статистика', icon: 'stats' },
+    { to: '/explore', label: 'Кадры', icon: 'explore' },
+    { to: '/liked', label: 'Любимые', icon: 'liked' },
+  ]
+  if (auth.isAdmin) {
+    items.push({ to: '/archive', label: 'Архив', icon: 'archive' })
+  }
+  return items
+})
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase()
+  }
+  return parts
+    .slice(0, 2)
+    .map(part => part.charAt(0).toUpperCase())
+    .join('')
+}
+
+watch(() => route.fullPath, () => {
+  menuOpen.value = false
+})
+
+watch(() => auth.isAuthenticated, () => {
+  menuOpen.value = false
+})
+
+function onDocumentClick(event: MouseEvent) {
+  if (!menuOpen.value) {
+    return
+  }
+  const target = event.target as Node | null
+  if (navRef.value && target && !navRef.value.contains(target)) {
+    menuOpen.value = false
+  }
+}
+
+function onKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    menuOpen.value = false
+  }
+}
 
 onMounted(() => {
   auth.update()
   loadBackendVersion()
   void frameEffects.ensureLoaded()
+  document.addEventListener('click', onDocumentClick)
+  document.addEventListener('keydown', onKeydown)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', onDocumentClick)
+  document.removeEventListener('keydown', onKeydown)
 })
 
 async function loadBackendVersion() {
@@ -105,6 +199,7 @@ async function handleLogout() {
 }
 
 .navbar {
+  position: relative;
   display: flex;
   flex: 0 0 auto;
   justify-content: space-between;
@@ -116,6 +211,12 @@ async function handleLogout() {
   gap: 0.5rem;
 }
 
+.nav-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .nav-brand a {
   color: var(--text-primary);
   text-decoration: none;
@@ -123,23 +224,78 @@ async function handleLogout() {
   font-weight: bold;
 }
 
-.nav-links {
+.nav-actions {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  flex-wrap: wrap;
 }
 
-.nav-links a {
+.icon-btn.menu-toggle {
+  display: none;
+}
+
+.nav-icons {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.nav-icon-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  color: var(--color-nav-link);
+  text-decoration: none;
+}
+
+.nav-icon-link:hover,
+.nav-icon-link.router-link-active {
+  color: var(--text-primary);
+  background: var(--color-nav-hover);
+  text-decoration: none;
+}
+
+.nav-icon-link svg,
+.nav-dropdown-link svg,
+.menu-toggle svg {
+  width: 20px;
+  height: 20px;
+}
+
+.nav-dropdown {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  left: 1rem;
+  z-index: 100;
+  display: none;
+  flex-direction: column;
+  min-width: 220px;
+  padding: 0.35rem;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-nav);
+  box-shadow: var(--shadow-strong);
+}
+
+.nav-dropdown-link {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 6px;
   color: var(--color-nav-link);
   text-decoration: none;
   font-size: 0.95rem;
-  padding: 0.4rem 0.25rem;
 }
 
-.nav-links a:hover,
-.nav-links a.router-link-active {
+.nav-dropdown-link:hover,
+.nav-dropdown-link.router-link-active {
   color: var(--text-primary);
+  background: var(--color-nav-hover);
+  text-decoration: none;
 }
 
 .user-name {
@@ -149,6 +305,16 @@ async function handleLogout() {
   text-overflow: ellipsis;
   font-size: 0.95rem;
   color: var(--color-nav-link);
+  text-decoration: none;
+}
+
+.user-name:hover {
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.user-name.short {
+  display: none;
 }
 
 .icon-btn {
@@ -227,9 +393,35 @@ async function handleLogout() {
   opacity: 0.65;
 }
 
+@media (max-width: 479px) {
+  .navbar {
+    flex-wrap: nowrap;
+  }
+
+  .nav-actions {
+    gap: 0.5rem;
+  }
+
+  .icon-btn.menu-toggle {
+    display: flex;
+  }
+
+  .nav-dropdown {
+    display: flex;
+  }
+
+  .nav-icons {
+    display: none;
+  }
+}
+
 @media (max-width: 599px) {
   .user-name.full {
     display: none;
+  }
+
+  .user-name.short {
+    display: inline;
   }
 }
 

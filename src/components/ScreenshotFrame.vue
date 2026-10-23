@@ -130,9 +130,9 @@
       <slot name="overlay"></slot>
 
       <div
-        v-if="card.views > 1"
+        v-if="showViews"
         class="views"
-        :class="{ 'views--with-like': actionable }"
+        :class="{ 'views--with-like': actionable && !viewsTopRight, 'views--top-right': viewsTopRight }"
         :title="`Просмотров: ${formatViews(card.views)}`"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -183,13 +183,15 @@ const props = withDefaults(defineProps<{
   busy?: boolean
   full?: boolean
   effects?: boolean
+  viewsTopRight?: boolean
 }>(), {
   width: 640,
   showMeta: true,
   actionable: false,
   busy: false,
   full: false,
-  effects: false
+  effects: false,
+  viewsTopRight: false
 })
 
 const emit = defineEmits<{ 'toggle-like': [] }>()
@@ -220,6 +222,7 @@ const pixelCanvas = ref<HTMLCanvasElement | null>(null)
 const pixelReady = ref(false)
 
 const canConfigure = computed(() => props.effects && auth.isAdmin)
+const showViews = computed(() => props.viewsTopRight || props.card.views > 1)
 
 const saveStatusText = computed(() => {
   if (saveState.value === 'saving') {
@@ -1080,6 +1083,28 @@ onBeforeUnmount(() => {
 @media (max-width: 700px) {
   .frame--full .caption {
     max-width: calc(100% - 6rem);
+  }
+}
+
+.views--top-right,
+.frame--full .views--top-right {
+  top: 0.75rem;
+  right: 0.75rem;
+  bottom: auto;
+  gap: 0.4rem;
+  font-size: clamp(1.2rem, 2.2vw, 1.8rem);
+  opacity: 0.5;
+}
+
+.views--top-right svg {
+  width: clamp(24px, 3vw, 32px);
+  height: clamp(24px, 3vw, 32px);
+}
+
+@media (min-width: 900px) {
+  .frame--full .views--top-right {
+    top: 1.25rem;
+    right: 2rem;
   }
 }
 </style>

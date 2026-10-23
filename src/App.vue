@@ -97,7 +97,7 @@ const router = useRouter()
 const route = useRoute()
 const auth = authStore()
 const frameEffects = frameEffectsStore()
-const immersive = computed(() => route.path === '/' || route.path === '/explore')
+const immersive = computed(() => route.meta.immersive === true)
 const ssoService = inject<SsoService>('ssoService')!
 const backendVersion = ref<string | null>(null)
 const frontendVersion = import.meta.env.FRONTEND_VERSION

@@ -8,10 +8,16 @@ const APP_ID = 'badmshot'
 const router = createRouter({
   history: createWebHistory('/badmshot/'),
   routes: [
-    { path: '/', component: HomeView },
+    { path: '/', component: HomeView, meta: { immersive: true } },
     { path: '/top', component: () => import('@/views/TopView.vue'), meta: { private: true } },
+    {
+      path: '/top/:id',
+      name: 'top-frame',
+      component: () => import('@/views/TopFrameView.vue'),
+      meta: { private: true, immersive: true }
+    },
     { path: '/stats', alias: '/tags', component: () => import('@/views/TagsView.vue'), meta: { private: true } },
-    { path: '/explore', component: () => import('@/views/ExploreView.vue'), meta: { private: true } },
+    { path: '/explore', component: () => import('@/views/ExploreView.vue'), meta: { private: true, immersive: true } },
     { path: '/liked', component: () => import('@/views/LikedView.vue'), meta: { private: true } },
     { path: '/faq', component: () => import('@/views/FaqView.vue') },
     {

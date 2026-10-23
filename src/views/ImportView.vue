@@ -35,6 +35,9 @@
       <div class="status-head">
         <span class="badge" :class="statusClass">{{ statusLabel }}</span>
         <span class="phase">{{ phaseLabel }}</span>
+        <span v-if="active" class="updated">
+          обновлено: {{ formatAgo(job.lastActivitySecondsAgo) }}
+        </span>
         <span class="job-id">{{ job.id }}</span>
       </div>
 
@@ -45,18 +48,70 @@
       <div class="numbers">
         <div><span class="number">{{ job.processedFiles }}</span> / {{ job.totalFiles }} матчей</div>
         <div><span class="number">{{ job.screenshotsCreated }}</span> кадров</div>
+        <div><span class="number">{{ formatFileSize(job.screenshotBytesAverage) }}</span> средний кадр</div>
+        <div><span class="number">{{ formatFileSize(job.screenshotBytesMax) }}</span> макс. кадр</div>
       </div>
 
       <div class="times">
-        <span>Начало: {{ formatDateTime(job.startedAt) }}</span>
-        <span>Длительность: {{ formatElapsed(durationSeconds) }}</span>
-        <span>Активность: {{ formatDateTime(job.lastActivityAt) }}</span>
-        <span v-if="job.finishedAt">Завершено: {{ formatDateTime(job.finishedAt) }}</span>
+        <span>Начато: {{ formatDateTime(job.startedAt) }}</span>
+        <span>Длительность: {{ formatElapsed(job.durationSeconds) }}</span>
+        <span v-if="!active && job.finishedAt">
+          Завершено: {{ formatDateTime(job.finishedAt) }}
+        </span>
       </div>
 
       <div v-if="job.error" class="job-error">{{ job.error }}</div>
     </section>
     <div v-else-if="!loading" class="empty">Активных импортов нет.</div>
+
+    <section class="history">
+      <div class="history-head">
+        <h2>История импортов</h2>
+        <span v-if="historyLoading" class="muted">Загрузка...</span>
+      </div>
+
+      <div v-if="historyError" class="error">{{ historyError }}</div>
+      <div v-if="historyLoading" class="empty">Загрузка...</div>
+      <div v-else-if="history.length === 0" class="empty">Импортов ещё не было.</div>
+      <div v-else class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Начало</th>
+              <th>Сессия / файл</th>
+              <th>Статус</th>
+              <th class="num">Матчи</th>
+              <th class="num">Кадры</th>
+              <th class="num">Средний кадр</th>
+              <th class="num">Макс. кадр</th>
+              <th class="num">Длительность</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in history" :key="item.id">
+              <td>{{ formatDateTime(item.startedAt) }}</td>
+              <td>
+                <div class="history-name">{{ item.sessionName || item.fileName || '—' }}</div>
+                <div v-if="item.sessionName && item.fileName" class="muted history-file">
+                  {{ item.fileName }}
+                </div>
+                <div v-if="item.error" class="history-error">{{ item.error }}</div>
+              </td>
+              <td>
+                <span class="badge" :class="item.status.toLowerCase()">
+                  {{ statusLabelFor(item.status) }}
+                </span>
+              </td>
+              <td class="num">{{ item.processedFiles }} / {{ item.totalFiles }}</td>
+              <td class="num">{{ item.screenshotsCreated }}</td>
+              <td class="num">{{ formatFileSize(item.screenshotBytesAverage) }}</td>
+              <td class="num">{{ formatFileSize(item.screenshotBytesMax) }}</td>
+              <td class="num">{{ jobDuration(item) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -66,20 +121,24 @@ import {
   cancelImportJob,
   getArchiveCapabilities,
   getImportJob,
+  getImportJobs,
   startImportJob
 } from '@/api'
 import type { ArchiveCapabilities, JobResponse } from '@/api'
 import BackButton from '@/components/BackButton.vue'
-import { formatElapsed } from '@/common'
+import { formatElapsed, formatFileSize } from '@/common'
 
 const fileInput = ref<HTMLInputElement | null>(null)
 const file = ref<File | null>(null)
 const capabilities = ref<ArchiveCapabilities | null>(null)
 const job = ref<JobResponse | null>(null)
+const history = ref<JobResponse[]>([])
 const loading = ref(true)
+const historyLoading = ref(true)
 const starting = ref(false)
 const cancelling = ref(false)
 const error = ref<string | null>(null)
+const historyError = ref<string | null>(null)
 
 let timer: ReturnType<typeof setInterval> | null = null
 
@@ -90,15 +149,6 @@ const percent = computed(() => {
   }
   return Math.min(100, Math.round((job.value.processedFiles / job.value.totalFiles) * 100))
 })
-const durationSeconds = computed(() => {
-  if (!job.value) {
-    return 0
-  }
-  const started = new Date(job.value.startedAt).getTime()
-  const finished = job.value.finishedAt ? new Date(job.value.finishedAt).getTime() : Date.now()
-  return Math.max(0, Math.round((finished - started) / 1000))
-})
-
 const statusLabels: Record<string, string> = {
   RUNNING: 'Выполняется',
   CANCELLING: 'Отмена...',
@@ -108,7 +158,11 @@ const statusLabels: Record<string, string> = {
   STUCK: 'Завис'
 }
 
-const statusLabel = computed(() => job.value ? statusLabels[job.value.status] || job.value.status : '')
+function statusLabelFor(status: string): string {
+  return statusLabels[status] || status
+}
+
+const statusLabel = computed(() => job.value ? statusLabelFor(job.value.status) : '')
 const statusClass = computed(() => job.value ? job.value.status.toLowerCase() : '')
 const phaseLabels: Record<string, string> = {
   IMPORT: 'Импорт',
@@ -123,7 +177,23 @@ const phaseLabel = computed(() => {
 
 function formatDateTime(value: string): string {
   const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString('ru-RU')
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+  const pad = (part: number) => part.toString().padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} `
+    + `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+}
+
+function formatAgo(seconds: number): string {
+  if (seconds < 60) {
+    return `${seconds} сек назад`
+  }
+  return `${Math.floor(seconds / 60)} мин назад`
+}
+
+function jobDuration(item: JobResponse): string {
+  return formatElapsed(item.durationSeconds)
 }
 
 function pickFile(event: Event) {
@@ -144,6 +214,17 @@ async function loadCapabilities() {
   }
 }
 
+async function loadHistory() {
+  try {
+    history.value = await getImportJobs()
+    historyError.value = null
+  } catch (e) {
+    historyError.value = e instanceof Error ? e.message : 'Не удалось получить историю импортов'
+  } finally {
+    historyLoading.value = false
+  }
+}
+
 async function refresh() {
   try {
     job.value = await getImportJob()
@@ -152,6 +233,7 @@ async function refresh() {
   } finally {
     loading.value = false
   }
+  await loadHistory()
   schedule()
 }
 
@@ -177,6 +259,7 @@ async function start() {
     if (fileInput.value) {
       fileInput.value.value = ''
     }
+    await loadHistory()
     schedule()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Не удалось запустить импорт'
@@ -346,6 +429,7 @@ h1 {
 }
 
 .phase,
+.updated,
 .job-id {
   color: var(--color-muted);
   font-size: 0.8rem;
@@ -393,6 +477,79 @@ h1 {
 .job-error {
   color: var(--color-danger);
   font-size: 0.9rem;
+}
+
+.history {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.history-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+
+.history-head h2 {
+  font-size: 1.1rem;
+}
+
+.muted {
+  color: var(--color-muted);
+  font-size: 0.8rem;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+}
+
+table {
+  width: 100%;
+  min-width: 860px;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.85rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  color: var(--color-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.history-name {
+  font-weight: 600;
+}
+
+.history-file {
+  margin-top: 0.15rem;
+  word-break: break-all;
+}
+
+.history-error {
+  margin-top: 0.25rem;
+  color: var(--color-danger);
+  font-size: 0.8rem;
 }
 
 .empty,

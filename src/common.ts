@@ -5,6 +5,20 @@ export function formatBytesHuman(mbytes: number): string {
   return `${(mbytes / 1024).toFixed(1)} ГБ`
 }
 
+export function formatFileSize(bytes: number | null | undefined): string {
+  if (!bytes || bytes <= 0) {
+    return '—'
+  }
+  const units = ['Б', 'КБ', 'МБ', 'ГБ']
+  let value = bytes
+  let unit = 0
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024
+    unit++
+  }
+  return `${unit === 0 ? Math.round(value) : value.toFixed(1)} ${units[unit]}`
+}
+
 export function formatDurationHuman(totalSeconds: number | null | undefined): string {
   if (!totalSeconds || totalSeconds <= 0) {
     return '—'

@@ -14,59 +14,35 @@
       Индексация отключена на этом сервере.
     </div>
 
-    <section class="options">
-      <label class="field">
-        <span>Кадров на матч</span>
-        <input v-model.number="options.screenshotsCount" type="number" min="1" max="100" />
-      </label>
-      <label class="field">
-        <span>Отступ от краёв, сек</span>
-        <input v-model.number="options.marginSeconds" type="number" min="0" />
-      </label>
-      <label class="field">
-        <span>Масштаб, % от оригинала</span>
-        <input v-model.number="options.scalePercent" type="number" min="1" max="100" />
-      </label>
-      <label class="field">
-        <span>Качество (JPEG/WebP)</span>
-        <input v-model.number="options.quality" type="number" min="1" max="100" />
-      </label>
-      <label class="field">
-        <span>Потоков</span>
-        <input v-model.number="options.threads" type="number" min="1" max="16" />
-      </label>
-      <label class="field">
-        <span>Плеер</span>
-        <select v-model="options.player">
-          <option value="ffmpeg">ffmpeg</option>
-          <option value="vlc">vlc</option>
-        </select>
-      </label>
-      <label class="field">
-        <span>Формат</span>
-        <select v-model="options.format">
-          <option value="webp">WebP</option>
-          <option value="jpeg">JPEG</option>
-        </select>
-      </label>
-    </section>
-
     <div class="actions">
-      <button class="btn-primary" :disabled="starting !== null || active || !capabilities?.indexEnabled" @click="start('META')">
+      <button
+        class="btn-primary"
+        :disabled="starting !== null || active || !capabilities?.indexEnabled"
+        @click="start('META')"
+      >
         {{ starting === 'META' ? 'Запуск...' : 'Обновить метаинформацию' }}
       </button>
-      <button class="btn-secondary" :disabled="starting !== null || active || !capabilities?.indexEnabled" @click="start('SCREENSHOTS')">
-        {{ starting === 'SCREENSHOTS' ? 'Запуск...' : 'Перезаписать скриншоты' }}
+      <button
+        class="btn-secondary"
+        :disabled="starting !== null || active || !capabilities?.indexEnabled || !defaults"
+        @click="openScreenshotOptions"
+      >
+        Нарезать скриншоты
       </button>
-      <button class="btn-secondary" :disabled="cancelling || !active" @click="cancel">Отменить</button>
+      <button class="btn-secondary" :disabled="cancelling || !active" @click="cancel">
+        Отменить
+      </button>
     </div>
 
-    <div v-if="error" class="error">{{ error }}</div>
+    <div v-if="error && !optionsOpen" class="error">{{ error }}</div>
 
     <section v-if="job" class="status">
       <div class="status-head">
         <span class="badge" :class="statusClass">{{ statusLabel }}</span>
         <span class="phase">{{ phaseLabel }}</span>
+        <span v-if="active" class="updated">
+          обновлено: {{ formatAgo(job.lastActivitySecondsAgo) }}
+        </span>
         <span v-if="job.id" class="job-id">{{ job.id }}</span>
       </div>
 
@@ -77,43 +53,158 @@
       <div class="numbers">
         <div><span class="number">{{ job.processedFiles }}</span> / {{ job.totalFiles }} файлов</div>
         <div><span class="number">{{ job.screenshotsCreated }}</span> кадров создано</div>
+        <div><span class="number">{{ formatFileSize(job.screenshotBytesAverage) }}</span> средний кадр</div>
+        <div><span class="number">{{ formatFileSize(job.screenshotBytesMax) }}</span> макс. кадр</div>
       </div>
 
       <div class="times">
         <span>Начато: {{ formatDateTime(job.startedAt) }}</span>
-        <span>Длительность: {{ formatElapsed(durationSeconds) }}</span>
-        <span>Активность: {{ formatDateTime(job.lastActivityAt) }}</span>
-        <span v-if="job.finishedAt">Завершено: {{ formatDateTime(job.finishedAt) }}</span>
+        <span>Длительность: {{ formatElapsed(job.durationSeconds) }}</span>
+        <span v-if="!active && job.finishedAt">
+          Завершено: {{ formatDateTime(job.finishedAt) }}
+        </span>
       </div>
 
       <div v-if="job.error" class="job-error">{{ job.error }}</div>
     </section>
     <div v-else-if="!loading" class="empty">Задач управления ещё не было.</div>
+
+    <Teleport to="body">
+      <div v-if="optionsOpen" class="backdrop" @click.self="closeScreenshotOptions">
+        <div
+          class="dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="screenshot-options-title"
+        >
+          <header class="dialog-header">
+            <h2 id="screenshot-options-title">Параметры нарезки</h2>
+            <button
+              class="close-btn"
+              type="button"
+              aria-label="Закрыть"
+              @click="closeScreenshotOptions"
+            >
+              ×
+            </button>
+          </header>
+
+          <div class="dialog-body">
+            <p class="hint">
+              Все существующие кадры будут удалены и созданы заново с указанными параметрами.
+            </p>
+
+            <section class="options">
+              <label class="field">
+                <span>Кадров на матч</span>
+                <input v-model.number="options.screenshotsCount" type="number" min="1" max="100" />
+              </label>
+              <label class="field">
+                <span>Отступ от краёв, сек</span>
+                <input v-model.number="options.marginSeconds" type="number" min="0" />
+              </label>
+              <label class="field">
+                <span>Масштаб, % от оригинала</span>
+                <input v-model.number="options.scalePercent" type="number" min="1" max="100" />
+              </label>
+              <label class="field">
+                <span>Качество (JPEG/WebP)</span>
+                <input v-model.number="options.quality" type="number" min="1" max="100" />
+              </label>
+              <label class="field">
+                <span>Потоков</span>
+                <input v-model.number="options.threads" type="number" min="1" max="16" />
+              </label>
+              <label class="field">
+                <span>Плеер</span>
+                <select v-model="options.player">
+                  <option value="ffmpeg">ffmpeg</option>
+                  <option value="vlc">vlc</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Формат</span>
+                <select v-model="options.format">
+                  <option value="webp">WebP</option>
+                  <option value="jpeg">JPEG</option>
+                </select>
+              </label>
+            </section>
+
+            <div v-if="error" class="error dialog-error">{{ error }}</div>
+          </div>
+
+          <footer class="dialog-footer">
+            <button
+              class="btn-secondary"
+              type="button"
+              :disabled="!defaults"
+              @click="resetOptions"
+            >
+              Сбросить
+            </button>
+            <button
+              class="btn-primary"
+              type="button"
+              :disabled="starting !== null || active"
+              @click="start('SCREENSHOTS')"
+            >
+              {{ starting === 'SCREENSHOTS' ? 'Запуск...' : 'Запустить нарезку' }}
+            </button>
+          </footer>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
-import { cancelIndexJob, getArchiveCapabilities, getIndexJob, startIndexJob } from '@/api'
-import type { ArchiveCapabilities, ArchiveJobMode, IndexOptions, JobResponse } from '@/api'
+import {
+  cancelIndexJob,
+  getArchiveCapabilities,
+  getIndexDefaults,
+  getIndexJob,
+  startIndexJob
+} from '@/api'
+import type {
+  ArchiveCapabilities,
+  ArchiveJobMode,
+  IndexDefaults,
+  IndexOptions,
+  JobResponse,
+  ScreenshotFormat
+} from '@/api'
 import BackButton from '@/components/BackButton.vue'
-import { formatElapsed } from '@/common'
+import { formatElapsed, formatFileSize } from '@/common'
 
-const options = reactive<IndexOptions>({
-  screenshotsCount: 12,
-  marginSeconds: 30,
-  scalePercent: 50,
+interface ScreenshotOptionsForm {
+  screenshotsCount: number
+  marginSeconds: number
+  scalePercent: number
+  quality: number
+  threads: number
+  player: string
+  format: ScreenshotFormat
+}
+
+const options = reactive<ScreenshotOptionsForm>({
+  screenshotsCount: 1,
+  marginSeconds: 0,
+  scalePercent: 100,
   quality: 75,
-  threads: 2,
+  threads: 1,
   player: 'ffmpeg',
-  format: 'webp'
+  format: 'jpeg'
 })
 
 const capabilities = ref<ArchiveCapabilities | null>(null)
+const defaults = ref<IndexDefaults | null>(null)
 const job = ref<JobResponse | null>(null)
 const loading = ref(true)
 const starting = ref<ArchiveJobMode | null>(null)
 const cancelling = ref(false)
+const optionsOpen = ref(false)
 const error = ref<string | null>(null)
 
 let timer: ReturnType<typeof setInterval> | null = null
@@ -125,15 +216,6 @@ const percent = computed(() => {
   }
   return Math.min(100, Math.round((job.value.processedFiles / job.value.totalFiles) * 100))
 })
-const durationSeconds = computed(() => {
-  if (!job.value) {
-    return 0
-  }
-  const started = new Date(job.value.startedAt).getTime()
-  const finished = job.value.finishedAt ? new Date(job.value.finishedAt).getTime() : Date.now()
-  return Math.max(0, Math.round((finished - started) / 1000))
-})
-
 const statusLabels: Record<string, string> = {
   RUNNING: 'Выполняется',
   CANCELLING: 'Отмена...',
@@ -159,7 +241,19 @@ const phaseLabel = computed(() => {
 
 function formatDateTime(value: string): string {
   const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString('ru-RU')
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+  const pad = (part: number) => part.toString().padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} `
+    + `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+}
+
+function formatAgo(seconds: number): string {
+  if (seconds < 60) {
+    return `${seconds} сек назад`
+  }
+  return `${Math.floor(seconds / 60)} мин назад`
 }
 
 async function refresh() {
@@ -183,11 +277,42 @@ function schedule() {
   }
 }
 
+function openScreenshotOptions() {
+  if (!defaults.value) {
+    return
+  }
+  error.value = null
+  optionsOpen.value = true
+}
+
+function closeScreenshotOptions() {
+  optionsOpen.value = false
+}
+
+function resetOptions() {
+  if (!defaults.value) {
+    return
+  }
+  options.screenshotsCount = defaults.value.screenshotsCount
+  options.marginSeconds = defaults.value.marginSeconds
+  options.scalePercent = defaults.value.scalePercent
+  options.quality = defaults.value.quality
+  options.threads = defaults.value.threads
+  options.player = defaults.value.player
+  options.format = defaults.value.format
+}
+
 async function start(mode: ArchiveJobMode) {
   starting.value = mode
   error.value = null
   try {
-    job.value = await startIndexJob({ ...options, mode })
+    const request: IndexOptions = mode === 'SCREENSHOTS'
+      ? { ...options, mode }
+      : { mode }
+    job.value = await startIndexJob(request)
+    if (mode === 'SCREENSHOTS') {
+      optionsOpen.value = false
+    }
     schedule()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Не удалось запустить задачу'
@@ -209,6 +334,15 @@ async function cancel() {
   }
 }
 
+async function loadDefaults() {
+  try {
+    defaults.value = await getIndexDefaults()
+    resetOptions()
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Не удалось получить параметры нарезки'
+  }
+}
+
 onMounted(async () => {
   try {
     capabilities.value = await getArchiveCapabilities()
@@ -220,6 +354,7 @@ onMounted(async () => {
       readOnly: true
     }
   }
+  await loadDefaults()
   await refresh()
 })
 onBeforeUnmount(() => {
@@ -366,6 +501,7 @@ h1 {
 }
 
 .phase,
+.updated,
 .job-id {
   color: var(--color-muted);
   font-size: 0.8rem;
@@ -415,6 +551,13 @@ h1 {
   font-size: 0.9rem;
 }
 
+.dialog-error {
+  padding: 0;
+  color: var(--color-danger);
+  font-size: 0.9rem;
+  text-align: left;
+}
+
 .loading,
 .empty,
 .error {
@@ -430,5 +573,75 @@ h1 {
 .empty {
   border: 1px dashed var(--color-border);
   border-radius: 8px;
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: var(--overlay-backdrop);
+  backdrop-filter: blur(3px);
+}
+
+.dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(680px, 100%);
+  max-height: min(90vh, 780px);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-strong);
+  overflow: hidden;
+}
+
+.dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.dialog-header h2 {
+  font-size: 1.15rem;
+}
+
+.close-btn {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.close-btn:hover {
+  background: var(--text-primary);
+  color: var(--accent-dark);
+}
+
+.dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.25rem;
+  overflow-y: auto;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  padding: 1rem 1.25rem;
+  border-top: 1px solid var(--color-border);
 }
 </style>

@@ -229,11 +229,28 @@ export interface JobResponse {
   totalFiles: number
   processedFiles: number
   screenshotsCreated: number
+  screenshotBytesTotal: number
+  screenshotBytesAverage: number
+  screenshotBytesMax: number
+  fileName: string | null
+  sessionName: string | null
   cancelRequested: boolean
   error: string | null
   startedAt: string
   lastActivityAt: string
   finishedAt: string | null
+  durationSeconds: number
+  lastActivitySecondsAgo: number
+}
+
+export interface IndexDefaults {
+  screenshotsCount: number
+  marginSeconds: number
+  scalePercent: number
+  quality: number
+  threads: number
+  player: string
+  format: ScreenshotFormat
 }
 
 export type ArchiveJobMode = 'META' | 'SCREENSHOTS'
@@ -418,6 +435,10 @@ export async function getImportJob(): Promise<JobResponse | null> {
   return response || null
 }
 
+export async function getImportJobs(limit = 20): Promise<JobResponse[]> {
+  return authApi.get<JobResponse[]>('/archive/import/history', { limit })
+}
+
 export async function cancelImportJob(): Promise<void> {
   await authApi.delete('/archive/import')
 }
@@ -445,6 +466,10 @@ export async function getArchiveStats(): Promise<ArchiveStats> {
 export async function getIndexJob(): Promise<JobResponse | null> {
   const response = await authApi.get<JobResponse | ''>('/archive/index-job')
   return response || null
+}
+
+export async function getIndexDefaults(): Promise<IndexDefaults> {
+  return authApi.get<IndexDefaults>('/archive/index-job/defaults')
 }
 
 export async function startIndexJob(options: IndexOptions = {}): Promise<JobResponse> {

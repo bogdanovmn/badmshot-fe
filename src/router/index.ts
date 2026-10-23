@@ -13,12 +13,18 @@ const router = createRouter({
     {
       path: '/top/:id',
       name: 'top-frame',
-      component: () => import('@/views/TopFrameView.vue'),
-      meta: { private: true, immersive: true }
+      component: () => import('@/views/FrameSequenceView.vue'),
+      meta: { private: true, immersive: true, sequence: 'top' }
     },
     { path: '/stats', alias: '/tags', component: () => import('@/views/TagsView.vue'), meta: { private: true } },
     { path: '/explore', component: () => import('@/views/ExploreView.vue'), meta: { private: true, immersive: true } },
     { path: '/liked', component: () => import('@/views/LikedView.vue'), meta: { private: true } },
+    {
+      path: '/liked/:id',
+      name: 'liked-frame',
+      component: () => import('@/views/FrameSequenceView.vue'),
+      meta: { private: true, immersive: true, sequence: 'liked' }
+    },
     { path: '/faq', component: () => import('@/views/FaqView.vue') },
     {
       path: '/login',

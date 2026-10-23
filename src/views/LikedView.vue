@@ -1,20 +1,26 @@
 <template>
   <div class="page">
-    <h1>Любимые кадры</h1>
+    <header class="page-head">
+      <h1>Любимые кадры</h1>
+      <p class="subtitle">Кадры, которые вы отметили сердечком</p>
+    </header>
+
     <ErrorNotice v-if="error" :message="error" />
     <div v-else-if="loading" class="loading">Загрузка...</div>
-    <div v-else-if="cards.length === 0" class="empty">
-      Вы ещё не добавили ни одного кадра в любимые.
+    <div v-else-if="cards.length === 0" class="stage">
+      <TvPlaceholder
+        title="В любимых пока пусто"
+        text="Загляните в раздел «Кадры» и поставьте сердечко понравившимся кадрам — они появятся здесь."
+      >
+        <router-link class="stage-link" to="/explore">Перейти к кадрам</router-link>
+      </TvPlaceholder>
     </div>
-    <div v-else class="grid">
-      <ScreenshotFrame
+    <div v-else class="list">
+      <FrameThumb
         v-for="card in cards"
         :key="card.id"
         :card="card"
-        :width="480"
-        actionable
-        :busy="busyId === card.id"
-        @toggle-like="unlike(card)"
+        :to="{ name: 'liked-frame', params: { id: card.id } }"
       />
     </div>
   </div>
@@ -22,15 +28,15 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { getErrorMessage, getLikedScreenshots, unlikeScreenshot } from '@/api'
+import { getErrorMessage, getLikedScreenshots } from '@/api'
 import type { ScreenshotCard } from '@/api'
 import ErrorNotice from '@/components/ErrorNotice.vue'
-import ScreenshotFrame from '@/components/ScreenshotFrame.vue'
+import FrameThumb from '@/components/FrameThumb.vue'
+import TvPlaceholder from '@/components/TvPlaceholder.vue'
 
 const cards = ref<ScreenshotCard[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
-const busyId = ref<string | null>(null)
 
 async function load() {
   loading.value = true
@@ -44,21 +50,6 @@ async function load() {
   }
 }
 
-async function unlike(card: ScreenshotCard) {
-  if (busyId.value) {
-    return
-  }
-  busyId.value = card.id
-  try {
-    await unlikeScreenshot(card.id)
-    cards.value = cards.value.filter(item => item.id !== card.id)
-  } catch (e) {
-    error.value = getErrorMessage(e, 'Не удалось убрать лайк')
-  } finally {
-    busyId.value = null
-  }
-}
-
 onMounted(load)
 </script>
 
@@ -69,42 +60,57 @@ onMounted(load)
   gap: 1rem;
 }
 
+.page-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
 h1 {
   font-size: 1.4rem;
 }
 
-.grid {
-  display: grid;
-  grid-template-columns: 1fr;
+.subtitle {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: 1.25rem;
 }
 
-@media (min-width: 640px) {
-  .grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
+.stage {
+  position: relative;
+  min-height: min(60vh, 460px);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
 }
 
-@media (min-width: 1000px) {
-  .grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
+.stage-link {
+  margin-top: 0.4rem;
+  min-height: 44px;
+  padding: 0.6rem 1.5rem;
+  border: 1px solid var(--btn-ghost-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary);
+  font-weight: 600;
+  text-decoration: none;
 }
 
-.loading,
-.empty,
-.error {
-  text-align: center;
+.stage-link:hover {
+  background: var(--text-primary);
+  color: var(--accent-dark);
+  text-decoration: none;
+}
+
+.loading {
   padding: 2.5rem 1rem;
   color: var(--color-muted);
-}
-
-.error {
-  color: var(--color-danger);
-}
-
-.empty {
-  border: 1px dashed var(--color-border);
-  border-radius: 8px;
+  text-align: center;
 }
 </style>

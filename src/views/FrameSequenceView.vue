@@ -1,5 +1,5 @@
 <template>
-  <div class="top-frame">
+  <div class="frame-sequence">
     <ScreenshotFrame
       v-if="card"
       ref="frameRef"
@@ -12,8 +12,8 @@
       @toggle-like="toggleLike"
     >
       <template #overlay>
-        <router-link class="top-badge" to="/top" title="Вернуться к ТОПу">
-          Кадр из ТОПа
+        <router-link class="sequence-badge" :to="config.badgeTo" :title="config.badgeTitle">
+          {{ config.badgeText }}
         </router-link>
 
         <button
@@ -47,8 +47,8 @@
     <div v-else class="stage">
       <div v-if="loading" class="stage-text">Загрузка кадра...</div>
       <template v-else>
-        <ErrorNotice :message="error || 'Кадр не найден в ТОПе'" class="stage-error-notice" />
-        <router-link class="stage-cta" to="/top">Вернуться к ТОПу</router-link>
+        <ErrorNotice :message="error || 'Кадр не найден'" class="stage-error-notice" />
+        <router-link class="stage-cta" :to="config.badgeTo">{{ config.backText }}</router-link>
       </template>
     </div>
 
@@ -61,6 +61,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   getErrorMessage,
+  getLikedScreenshots,
   getTopScreenshots,
   likeScreenshot,
   registerScreenshotView,
@@ -69,6 +70,45 @@ import {
 import type { ScreenshotCard } from '@/api'
 import ErrorNotice from '@/components/ErrorNotice.vue'
 import ScreenshotFrame from '@/components/ScreenshotFrame.vue'
+
+type SequenceKind = 'top' | 'liked'
+
+interface SequenceConfig {
+  loader: () => Promise<ScreenshotCard[]>
+  routeName: string
+  badgeText: string
+  badgeTitle: string
+  badgeTo: string
+  backText: string
+  loadError: string
+  notFound: string
+  empty: string
+}
+
+const CONFIGS: Record<SequenceKind, SequenceConfig> = {
+  top: {
+    loader: getTopScreenshots,
+    routeName: 'top-frame',
+    badgeText: 'Кадр из ТОПа',
+    badgeTitle: 'Вернуться к ТОПу',
+    badgeTo: '/top',
+    backText: 'Вернуться к ТОПу',
+    loadError: 'Не удалось загрузить ТОП',
+    notFound: 'Этот кадр больше не входит в ТОП.',
+    empty: 'В ТОПе пока нет кадров.'
+  },
+  liked: {
+    loader: getLikedScreenshots,
+    routeName: 'liked-frame',
+    badgeText: 'Любимый кадр',
+    badgeTitle: 'Вернуться к любимым',
+    badgeTo: '/liked',
+    backText: 'Вернуться к любимым',
+    loadError: 'Не удалось загрузить любимые кадры',
+    notFound: 'Этот кадр больше не в любимых.',
+    empty: 'В любимых пока нет кадров.'
+  }
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -81,6 +121,8 @@ const liking = ref(false)
 const transitioning = ref(false)
 const error = ref<string | null>(null)
 
+const kind = computed<SequenceKind>(() => route.meta.sequence === 'liked' ? 'liked' : 'top')
+const config = computed(() => CONFIGS[kind.value])
 const card = computed<ScreenshotCard | null>(() => cards.value[index.value] ?? null)
 const canPrev = computed(() => index.value > 0)
 const canNext = computed(() => index.value >= 0 && index.value < cards.value.length - 1)
@@ -89,19 +131,17 @@ async function load() {
   loading.value = true
   error.value = null
   try {
-    cards.value = await getTopScreenshots()
+    cards.value = await config.value.loader()
     const frameId = typeof route.params.id === 'string' ? route.params.id : ''
     const position = cards.value.findIndex(item => item.id === frameId)
     if (position < 0) {
       index.value = -1
-      error.value = cards.value.length
-        ? 'Этот кадр больше не входит в ТОП.'
-        : 'В ТОПе пока нет кадров.'
+      error.value = cards.value.length ? config.value.notFound : config.value.empty
     } else {
       index.value = position
     }
   } catch (e) {
-    error.value = getErrorMessage(e, 'Не удалось загрузить ТОП')
+    error.value = getErrorMessage(e, config.value.loadError)
   } finally {
     loading.value = false
   }
@@ -114,7 +154,7 @@ async function selectIndex(target: number) {
   }
   index.value = target
   error.value = null
-  await router.replace({ name: 'top-frame', params: { id: nextCard.id } })
+  await router.replace({ name: config.value.routeName, params: { id: nextCard.id } })
 }
 
 async function step(delta: number) {
@@ -187,6 +227,15 @@ watch(
 )
 
 watch(
+  () => route.meta.sequence,
+  () => {
+    cards.value = []
+    index.value = -1
+    void load()
+  }
+)
+
+watch(
   () => card.value?.id,
   id => {
     if (id) {
@@ -199,7 +248,7 @@ onMounted(load)
 </script>
 
 <style scoped>
-.top-frame {
+.frame-sequence {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -246,7 +295,7 @@ onMounted(load)
   text-decoration: none;
 }
 
-.top-badge {
+.sequence-badge {
   position: absolute;
   top: 0.75rem;
   left: 0.75rem;
@@ -265,7 +314,7 @@ onMounted(load)
   transition: background-color 0.2s, color 0.2s;
 }
 
-.top-badge:hover {
+.sequence-badge:hover {
   background: var(--text-primary);
   color: var(--accent-dark);
   text-decoration: none;
@@ -332,7 +381,7 @@ onMounted(load)
 }
 
 @media (min-width: 900px) {
-  .top-badge {
+  .sequence-badge {
     top: 1.25rem;
     left: 2rem;
   }

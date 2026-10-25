@@ -430,7 +430,7 @@ async function handleLogout() {
     padding: 1rem 2rem;
   }
 
-  .content {
+  .content:not(.content--immersive) {
     margin: 2rem auto;
     padding: 0 2rem;
   }

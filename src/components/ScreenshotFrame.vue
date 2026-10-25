@@ -3,7 +3,7 @@
     <div
       class="image-wrap"
       :class="{ 'effect-halftone': halftone, 'effect-blur': blur }"
-      :style="[aspectStyle, effectStyle]"
+      :style="[full ? null : aspectStyle, effectStyle]"
     >
       <div v-if="!loaded" class="placeholder">Загрузка кадра...</div>
       <img

@@ -19,7 +19,7 @@
       <canvas
         ref="pixelCanvas"
         class="fx-pixel"
-        :class="{ visible: pixelReady && (pixelate || transitionBoost > 0.001) }"
+        :class="{ visible: pixelReady && pixelEffectsActive() }"
         :style="{ filter: imageFilter }"
         aria-hidden="true"
       ></canvas>
@@ -109,6 +109,17 @@
 
         <div class="fx-item">
           <label class="fx-toggle">
+            <input v-model="edgePixelate" type="checkbox" />
+            <span>Пиксели к краям</span>
+          </label>
+          <label v-if="edgePixelate" class="fx-slider">
+            <span>Сила <em>{{ edgePixelStrength }}</em></span>
+            <input v-model.number="edgePixelStrength" type="range" min="0" max="100" step="1" />
+          </label>
+        </div>
+
+        <div class="fx-item">
+          <label class="fx-toggle">
             <input v-model="transitionEnabled" type="checkbox" />
             <span>Пиксельный переход</span>
           </label>
@@ -192,6 +203,15 @@ const BAYER = [
   [15, 7, 13, 5]
 ]
 
+// Граница зоны прогрессивной пикселизации сверху и снизу (доля от высоты кадра).
+const EDGE_BAND_Y = 0.2
+
+interface PixelCell {
+  x: number
+  y: number
+  size: number
+}
+
 const props = withDefaults(defineProps<{
   card: ScreenshotCard
   width?: number
@@ -225,6 +245,8 @@ const blurStrength = ref(DEFAULT_FRAME_EFFECTS.blurStrength)
 const pixelate = ref(DEFAULT_FRAME_EFFECTS.pixelate)
 const pixelStrength = ref(DEFAULT_FRAME_EFFECTS.pixelStrength)
 const pixelColors = ref(DEFAULT_FRAME_EFFECTS.pixelColors)
+const edgePixelate = ref(DEFAULT_FRAME_EFFECTS.edgePixelate)
+const edgePixelStrength = ref(DEFAULT_FRAME_EFFECTS.edgePixelStrength)
 
 const transitionEnabled = ref(DEFAULT_FRAME_EFFECTS.transitionEnabled)
 const transitionDuration = ref(DEFAULT_FRAME_EFFECTS.transitionDuration)
@@ -287,7 +309,7 @@ async function loadImage() {
       await nextTick()
       URL.revokeObjectURL(previous)
     }
-    if (pixelate.value || transitionBoost.value > 0.001) {
+    if (pixelEffectsActive()) {
       schedulePixelRender()
     } else {
       pixelReady.value = false
@@ -366,6 +388,8 @@ function applySettings(settings: FrameEffectSettings) {
   pixelate.value = settings.pixelate
   pixelStrength.value = settings.pixelStrength
   pixelColors.value = settings.pixelColors
+  edgePixelate.value = settings.edgePixelate
+  edgePixelStrength.value = settings.edgePixelStrength
   transitionEnabled.value = settings.transitionEnabled
   transitionDuration.value = settings.transitionDuration
   transitionPixels.value = settings.transitionPixels
@@ -380,6 +404,8 @@ function currentSettings(): FrameEffectSettings {
     pixelate: pixelate.value,
     pixelStrength: pixelStrength.value,
     pixelColors: pixelColors.value,
+    edgePixelate: edgePixelate.value,
+    edgePixelStrength: edgePixelStrength.value,
     transitionEnabled: transitionEnabled.value,
     transitionDuration: transitionDuration.value,
     transitionPixels: transitionPixels.value
@@ -415,6 +441,7 @@ let renderBusy = false
 let renderQueued = false
 let lastRenderAt = 0
 let transitionRaf = 0
+let edgeSampleCanvas: HTMLCanvasElement | null = null
 
 const transitionRunning = ref(false)
 
@@ -464,6 +491,194 @@ function currentPixelColors(): number {
   return Math.max(2, reduced)
 }
 
+function pixelEffectsActive(): boolean {
+  return pixelate.value || edgePixelate.value || transitionBoost.value > 0.001
+}
+
+function edgeRamp(distance: number, band: number): number {
+  if (band <= 0) {
+    return 0
+  }
+  const value = clamp(1 - distance / band, 0, 1)
+  return value * value * (3 - 2 * value)
+}
+
+function edgeFactorAt(y: number, height: number): number {
+  return edgeRamp(Math.min(y, height - y), height * EDGE_BAND_Y)
+}
+
+function blockSizeAt(
+  y: number,
+  height: number,
+  base: number,
+  edgeMax: number
+): number {
+  return base + (edgeMax - base) * edgeFactorAt(y, height)
+}
+
+function edgeMaxBlock(width: number): number {
+  if (!edgePixelate.value) {
+    return 0
+  }
+  const strength = clamp(edgePixelStrength.value, 0, 100) / 100
+  if (strength <= 0) {
+    return 0
+  }
+  const base = Math.max(1, currentPixelBlock())
+  // Крупный блок у самой кромки: масштабируется вместе с кадром,
+  // добавляется к базовой пикселизации и плавно зависит от силы эффекта.
+  return base + (1.5 + width * 0.032) * strength
+}
+
+function buildEdgeCells(width: number, height: number, base: number, edgeMax: number): PixelCell[] {
+  const cells: PixelCell[] = []
+  const bandY = height * EDGE_BAND_Y
+  const rootSize = Math.max(2, Math.round(edgeMax))
+  const minBase = Math.max(1, base)
+  // Мелкие блоки в начале рампы визуально неразличимы, но дают тысячи
+  // прямоугольников. Отсекаем их, чтобы анимация оставалась плавной.
+  const noiseFloor = Math.max(minBase + 0.75, 3.25)
+  const stack: PixelCell[] = []
+
+  for (let y = 0; y < height; y += rootSize) {
+    for (let x = 0; x < width; x += rootSize) {
+      stack.push({ x, y, size: rootSize })
+    }
+  }
+
+  while (stack.length) {
+    const cell = stack.pop()!
+    const y1 = Math.min(height, cell.y + cell.size)
+    const inCenter = cell.y >= bandY && y1 <= height - bandY
+    if (inCenter) {
+      continue
+    }
+
+    // Точка внутри ячейки с максимальной силой эффекта — ближайшая к кромке.
+    const outerY = cell.y <= height - y1 ? cell.y : y1
+    const localMax = blockSizeAt(outerY, height, base, edgeMax)
+    if (localMax <= noiseFloor) {
+      continue
+    }
+
+    if (cell.size > localMax * 1.3 && cell.size > minBase + 0.5) {
+      const half = cell.size / 2
+      if (half < 0.75) {
+        cells.push(cell)
+        continue
+      }
+      stack.push({ x: cell.x, y: cell.y, size: half })
+      stack.push({ x: cell.x + half, y: cell.y, size: half })
+      stack.push({ x: cell.x, y: cell.y + half, size: half })
+      stack.push({ x: cell.x + half, y: cell.y + half, size: half })
+      continue
+    }
+
+    cells.push(cell)
+  }
+
+  return cells
+}
+
+function averageCellColor(
+  data: Uint8ClampedArray,
+  sampleWidth: number,
+  sampleHeight: number,
+  scaleX: number,
+  scaleY: number,
+  cell: PixelCell
+): [number, number, number] | null {
+  const x0 = clamp(Math.floor(cell.x * scaleX), 0, sampleWidth - 1)
+  const y0 = clamp(Math.floor(cell.y * scaleY), 0, sampleHeight - 1)
+  const x1 = clamp(Math.ceil((cell.x + cell.size) * scaleX), x0 + 1, sampleWidth)
+  const y1 = clamp(Math.ceil((cell.y + cell.size) * scaleY), y0 + 1, sampleHeight)
+  let red = 0
+  let green = 0
+  let blue = 0
+  let count = 0
+  for (let row = y0; row < y1; row++) {
+    const offset = row * sampleWidth
+    for (let column = x0; column < x1; column++) {
+      const index = (offset + column) * 4
+      red += data[index]
+      green += data[index + 1]
+      blue += data[index + 2]
+      count++
+    }
+  }
+  if (!count) {
+    return null
+  }
+  return [red / count, green / count, blue / count]
+}
+
+function quantizeColor(value: number, step: number, threshold: number): number {
+  return clamp(Math.round((value + threshold) / step) * step, 0, 255)
+}
+
+function drawEdgeCells(
+  context: CanvasRenderingContext2D,
+  source: HTMLImageElement,
+  width: number,
+  height: number,
+  cells: PixelCell[],
+  base: number,
+  colors: number,
+  dither: boolean
+) {
+  const sampleStep = Math.max(2, Math.round(Math.max(base, 1) / 2))
+  const sampleWidth = Math.max(1, Math.ceil(width / sampleStep))
+  const sampleHeight = Math.max(1, Math.ceil(height / sampleStep))
+  if (!edgeSampleCanvas) {
+    edgeSampleCanvas = document.createElement('canvas')
+  }
+  const sample = edgeSampleCanvas
+  sample.width = sampleWidth
+  sample.height = sampleHeight
+  const sampleContext = sample.getContext('2d', { willReadFrequently: true })
+  if (!sampleContext) {
+    return
+  }
+  sampleContext.imageSmoothingEnabled = true
+  sampleContext.drawImage(source, 0, 0, sampleWidth, sampleHeight)
+
+  let data: Uint8ClampedArray
+  try {
+    data = sampleContext.getImageData(0, 0, sampleWidth, sampleHeight).data
+  } catch {
+    return
+  }
+
+  const scaleX = sampleWidth / width
+  const scaleY = sampleHeight / height
+  const levels = Math.max(2, Math.round(colors))
+  const step = 255 / (levels - 1)
+  const grid = Math.max(1, Math.round(base))
+
+  for (const cell of cells) {
+    const color = averageCellColor(data, sampleWidth, sampleHeight, scaleX, scaleY, cell)
+    if (!color) {
+      continue
+    }
+    let [red, green, blue] = color
+    if (dither) {
+      const threshold = (BAYER[Math.floor(cell.y / grid) % 4][Math.floor(cell.x / grid) % 4] / 16 - 0.5) * step
+      red = quantizeColor(red, step, threshold)
+      green = quantizeColor(green, step, threshold)
+      blue = quantizeColor(blue, step, threshold)
+    }
+    const x = Math.round(cell.x)
+    const y = Math.round(cell.y)
+    const cellWidth = Math.round(Math.min(width, cell.x + cell.size)) - x
+    const cellHeight = Math.round(Math.min(height, cell.y + cell.size)) - y
+    if (cellWidth <= 0 || cellHeight <= 0) {
+      continue
+    }
+    context.fillStyle = `rgb(${Math.round(red)}, ${Math.round(green)}, ${Math.round(blue)})`
+    context.fillRect(x, y, cellWidth, cellHeight)
+  }
+}
+
 async function drawPixelCanvas(
   canvas: HTMLCanvasElement | null,
   block: number,
@@ -480,46 +695,67 @@ async function drawPixelCanvas(
 
   const width = Math.max(1, props.card.width || source.naturalWidth)
   const height = Math.max(1, props.card.height || source.naturalHeight)
-  const size = Math.max(1, Math.round(block))
-  const smallWidth = Math.max(1, Math.floor(width / size))
-  const smallHeight = Math.max(1, Math.floor(height / size))
+  const base = Math.max(1, block)
+  const size = Math.max(1, Math.round(base))
+  const edgeMax = edgeMaxBlock(width)
+  const hasBase = size > 1
+  const hasEdge = edgeMax > base + 0.75
 
-  const small = document.createElement('canvas')
-  small.width = smallWidth
-  small.height = smallHeight
-  const smallContext = small.getContext('2d', { willReadFrequently: true })
-  if (!smallContext) {
-    return false
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width
+    canvas.height = height
   }
-  smallContext.imageSmoothingEnabled = true
-  smallContext.drawImage(source, 0, 0, smallWidth, smallHeight)
-
-  if (dither) {
-    let pixels: ImageData
-    try {
-      pixels = smallContext.getImageData(0, 0, smallWidth, smallHeight)
-    } catch {
-      return false
-    }
-    applyDither(pixels, colors)
-    smallContext.putImageData(pixels, 0, 0)
-  }
-
-  canvas.width = width
-  canvas.height = height
   const context = canvas.getContext('2d')
   if (!context) {
     return false
   }
   context.imageSmoothingEnabled = false
   context.clearRect(0, 0, width, height)
-  context.drawImage(small, 0, 0, smallWidth, smallHeight, 0, 0, width, height)
+
+  if (!hasBase && !hasEdge) {
+    return false
+  }
+
+  if (hasBase) {
+    const smallWidth = Math.max(1, Math.floor(width / size))
+    const smallHeight = Math.max(1, Math.floor(height / size))
+
+    const small = document.createElement('canvas')
+    small.width = smallWidth
+    small.height = smallHeight
+    const smallContext = small.getContext('2d', { willReadFrequently: true })
+    if (!smallContext) {
+      return false
+    }
+    smallContext.imageSmoothingEnabled = true
+    smallContext.drawImage(source, 0, 0, smallWidth, smallHeight)
+
+    if (dither) {
+      let pixels: ImageData
+      try {
+        pixels = smallContext.getImageData(0, 0, smallWidth, smallHeight)
+      } catch {
+        return false
+      }
+      applyDither(pixels, colors)
+      smallContext.putImageData(pixels, 0, 0)
+    }
+
+    context.drawImage(small, 0, 0, smallWidth, smallHeight, 0, 0, width, height)
+  }
+
+  if (hasEdge) {
+    const cells = buildEdgeCells(width, height, base, edgeMax)
+    if (cells.length) {
+      drawEdgeCells(context, source, width, height, cells, base, colors, dither)
+    }
+  }
+
   return true
 }
 
 async function renderPixelArt() {
-  const active = pixelate.value || transitionBoost.value > 0.001
-  if (!active) {
+  if (!pixelEffectsActive()) {
     pixelReady.value = false
     return
   }
@@ -631,7 +867,7 @@ async function runTransition(swap: () => void | Promise<void>): Promise<void> {
   } finally {
     transitionBoost.value = 0
     transitionRunning.value = false
-    if (pixelate.value) {
+    if (pixelEffectsActive()) {
       schedulePixelRender()
     } else {
       pixelReady.value = false
@@ -650,6 +886,8 @@ watch(
     pixelate,
     pixelStrength,
     pixelColors,
+    edgePixelate,
+    edgePixelStrength,
     transitionEnabled,
     transitionDuration,
     transitionPixels
@@ -661,7 +899,7 @@ watch(
         saveState.value = 'idle'
       }
     }
-    if (pixelate.value || transitionBoost.value > 0.001) {
+    if (pixelEffectsActive()) {
       schedulePixelRender()
     } else {
       pixelReady.value = false
@@ -680,11 +918,11 @@ watch(
 onMounted(() => {
   auth.update()
   applySettings(settingsStore.settings)
-  if (pixelate.value) {
+  if (pixelEffectsActive()) {
     schedulePixelRender()
   }
   void loadSettings().then(() => {
-    if (pixelate.value) {
+    if (pixelEffectsActive()) {
       schedulePixelRender()
     }
   })
@@ -699,6 +937,7 @@ onBeforeUnmount(() => {
   }
   sourceVersion++
   imageVersion++
+  edgeSampleCanvas = null
   releaseObjectUrl()
 })
 </script>

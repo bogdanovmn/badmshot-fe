@@ -13,6 +13,8 @@ export interface FrameEffectSettings {
   pixelate: boolean
   pixelStrength: number
   pixelColors: number
+  edgePixelate: boolean
+  edgePixelStrength: number
   transitionEnabled: boolean
   transitionDuration: number
   transitionPixels: number

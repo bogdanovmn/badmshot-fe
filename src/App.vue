@@ -204,7 +204,7 @@ async function handleLogout() {
   flex: 0 0 auto;
   justify-content: space-between;
   align-items: center;
-  padding: 0.75rem 1rem;
+  padding: 0.35rem 1rem;
   background: var(--color-nav);
   color: var(--text-primary);
   flex-wrap: wrap;
@@ -427,7 +427,7 @@ async function handleLogout() {
 
 @media (min-width: 768px) {
   .navbar {
-    padding: 1rem 2rem;
+    padding: 0.35rem 2rem;
   }
 
   .content:not(.content--immersive) {

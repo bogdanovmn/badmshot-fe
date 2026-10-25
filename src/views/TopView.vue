@@ -2,7 +2,7 @@
   <div class="page">
     <header class="page-head">
       <h1>ТОП кадров</h1>
-      <p class="subtitle">Сначала по лайкам, затем по просмотрам</p>
+      <p class="subtitle">Сначала по лайкам, затем по комментариям и просмотрам</p>
     </header>
 
     <ErrorNotice v-if="error" :message="error" />

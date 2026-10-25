@@ -107,6 +107,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   getClubsByIds,
+  getDefaultFrameFilter,
   getErrorMessage,
   getFrameRateLimit,
   getNextScreenshot,
@@ -381,6 +382,20 @@ async function toggleLike() {
   }
 }
 
+async function loadDefaultFilter() {
+  try {
+    const filter = await getDefaultFrameFilter()
+    includeIndi.value = filter.includeIndi
+    if (filter.playerIds.length || filter.clubIds.length) {
+      await loadSelection(filter.playerIds, filter.clubIds)
+    }
+  } catch {
+    includeIndi.value = false
+    selectedPlayers.value = []
+    selectedClubs.value = []
+  }
+}
+
 watch(
   () => route.fullPath,
   async () => {
@@ -418,8 +433,10 @@ onMounted(async () => {
   const playerIds = queryValues(route.query.players)
   const clubIds = queryValues(route.query.clubs)
   includeIndi.value = queryFlag(route.query.indi)
-  if (playerIds.length || clubIds.length) {
+  if (playerIds.length || clubIds.length || includeIndi.value) {
     await loadSelection(playerIds, clubIds)
+  } else {
+    await loadDefaultFilter()
   }
   await loadNext()
 })

@@ -158,9 +158,8 @@
       <slot name="overlay"></slot>
 
       <div
-        v-if="showViews"
-        class="views"
-        :class="{ 'views--with-like': actionable && !viewsTopRight, 'views--top-right': viewsTopRight }"
+        v-if="showViews && viewsTopRight"
+        class="views views--top-right"
         :title="`Просмотров: ${formatViews(card.views)}`"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -170,19 +169,79 @@
         <span>{{ formatViews(card.views) }}</span>
       </div>
 
-      <button
-        v-if="actionable"
-        class="like-btn"
-        :class="{ active: card.liked }"
-        :disabled="busy"
-        :title="card.liked ? 'Убрать из любимых' : 'В любимые'"
-        :aria-label="card.liked ? 'Убрать из любимых' : 'В любимые'"
-        @click="emit('toggle-like')"
-      >
-        <svg viewBox="0 0 24 24" :fill="card.liked ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-        </svg>
-      </button>
+      <div v-if="showViews || actionable || showSocialActions" class="frame-actions">
+        <div
+          v-if="showViews && !viewsTopRight"
+          class="views"
+          :title="`Просмотров: ${formatViews(card.views)}`"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+          <span>{{ formatViews(card.views) }}</span>
+        </div>
+
+        <button
+          v-if="showSocialActions"
+          class="action-btn"
+          type="button"
+          title="Поделиться кадром"
+          aria-label="Поделиться кадром"
+          @click="shareOpen = true"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="18" cy="5" r="3" />
+            <circle cx="6" cy="12" r="3" />
+            <circle cx="18" cy="19" r="3" />
+            <line x1="8.59" y1="10.51" x2="15.42" y2="6.49" />
+            <line x1="8.59" y1="13.49" x2="15.42" y2="17.51" />
+          </svg>
+        </button>
+
+        <button
+          v-if="showSocialActions"
+          class="action-btn comment-btn"
+          type="button"
+          :title="commentsCount > 0 ? `Комментарии: ${formatViews(commentsCount)}` : 'Комментировать'"
+          aria-label="Комментарии"
+          @click="commentsOpen = true"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            <line x1="8" y1="9" x2="16" y2="9" />
+            <line x1="8" y1="13" x2="13" y2="13" />
+          </svg>
+          <span v-if="commentsCount > 0" class="action-badge">{{ formatViews(commentsCount) }}</span>
+        </button>
+
+        <button
+          v-if="actionable"
+          class="action-btn like-btn"
+          :class="{ active: card.liked }"
+          :disabled="busy"
+          :title="card.liked ? 'Убрать из любимых' : 'В любимые'"
+          :aria-label="card.liked ? 'Убрать из любимых' : 'В любимые'"
+          @click="emit('toggle-like')"
+        >
+          <svg viewBox="0 0 24 24" :fill="card.liked ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+          </svg>
+        </button>
+      </div>
+
+      <CommentsDialog
+        v-if="commentsOpen"
+        :screenshot-id="card.id"
+        @close="commentsOpen = false"
+        @created="onCommentCreated"
+      />
+
+      <ShareDialog
+        v-if="shareOpen"
+        :screenshot-id="card.id"
+        @close="shareOpen = false"
+      />
     </div>
   </figure>
 </template>
@@ -191,10 +250,12 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { CSSProperties } from 'vue'
 import type { FrameEffectSettings, ScreenshotCard } from '@/api'
-import { screenshotImageUrl } from '@/api'
+import { screenshotImageUrl, sharedScreenshotUrl } from '@/api'
 import { formatDateRu } from '@/common'
 import { DEFAULT_FRAME_EFFECTS, frameEffectsStore } from '@/stores/frameEffects'
 import { authStore } from '@/stores/auth'
+import CommentsDialog from '@/components/CommentsDialog.vue'
+import ShareDialog from '@/components/ShareDialog.vue'
 
 const BAYER = [
   [0, 8, 2, 10],
@@ -221,6 +282,7 @@ const props = withDefaults(defineProps<{
   full?: boolean
   effects?: boolean
   viewsTopRight?: boolean
+  shareToken?: string
 }>(), {
   width: 640,
   showMeta: true,
@@ -228,7 +290,8 @@ const props = withDefaults(defineProps<{
   busy: false,
   full: false,
   effects: false,
-  viewsTopRight: false
+  viewsTopRight: false,
+  shareToken: ''
 })
 
 const emit = defineEmits<{ 'toggle-like': [] }>()
@@ -256,12 +319,17 @@ const transitionBoost = ref(0)
 const saveState = ref<'idle' | 'saving' | 'saved' | 'error'>('idle')
 const settingsDirty = ref(false)
 
+const commentsOpen = ref(false)
+const shareOpen = ref(false)
+const commentsCount = ref(props.card.comments)
+
 const frameImg = ref<HTMLImageElement | null>(null)
 const pixelCanvas = ref<HTMLCanvasElement | null>(null)
 const pixelReady = ref(false)
 
 const canConfigure = computed(() => props.effects && auth.isAdmin)
 const showViews = computed(() => props.viewsTopRight || props.card.views > 1)
+const showSocialActions = computed(() => auth.isAuthenticated && !props.shareToken)
 
 const saveStatusText = computed(() => {
   if (saveState.value === 'saving') {
@@ -291,10 +359,19 @@ async function loadImage() {
   const version = ++imageVersion
   loaded.value = false
   invalidatePixelSource()
+  const targetWidth = props.full ? props.card.width : props.width
+  if (props.shareToken) {
+    releaseObjectUrl()
+    url.value = sharedScreenshotUrl(props.shareToken, targetWidth)
+    if (pixelEffectsActive()) {
+      schedulePixelRender()
+    }
+    return
+  }
   try {
     const nextUrl = await screenshotImageUrl(
       props.card.id,
-      props.full ? props.card.width : props.width
+      targetWidth
     )
     if (version !== imageVersion) {
       if (nextUrl.startsWith('blob:')) {
@@ -875,6 +952,10 @@ async function runTransition(swap: () => void | Promise<void>): Promise<void> {
   }
 }
 
+function onCommentCreated() {
+  commentsCount.value++
+}
+
 defineExpose({ runTransition })
 
 watch(
@@ -908,11 +989,20 @@ watch(
 )
 
 watch(
-  () => [props.card.id, props.full ? props.card.width : props.width],
+  () => [props.card.id, props.full ? props.card.width : props.width, props.shareToken],
   () => {
     void loadImage()
   },
   { immediate: true }
+)
+
+watch(
+  () => props.card.id,
+  () => {
+    commentsCount.value = props.card.comments
+    commentsOpen.value = false
+    shareOpen.value = false
+  }
 )
 
 onMounted(() => {
@@ -1236,11 +1326,17 @@ onBeforeUnmount(() => {
   color: var(--text-secondary);
 }
 
-.views {
+.frame-actions {
   position: absolute;
   right: 0.75rem;
   bottom: 0.75rem;
   z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.views {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
@@ -1252,20 +1348,13 @@ onBeforeUnmount(() => {
   text-shadow: 0 1px 4px var(--accent-dark);
 }
 
-.views--with-like {
-  right: calc(0.75rem + 64px + 0.5rem);
-}
-
 .views svg {
   width: 20px;
   height: 20px;
 }
 
-.like-btn {
-  position: absolute;
-  right: 0.75rem;
-  bottom: 0.75rem;
-  z-index: 3;
+.action-btn {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1281,28 +1370,41 @@ onBeforeUnmount(() => {
   transition: background-color 0.2s, color 0.2s;
 }
 
-.like-btn:hover:not(:disabled) {
+.action-btn:hover:not(:disabled) {
   background: var(--text-primary);
   color: var(--accent-dark);
 }
 
-.like-btn.active {
+.action-btn.active {
   color: var(--text-primary);
   border-color: var(--text-secondary);
 }
 
-.like-btn.active svg {
-  color: var(--text-primary);
-}
-
-.like-btn:disabled {
+.action-btn:disabled {
   opacity: 0.6;
   cursor: default;
 }
 
-.like-btn svg {
+.action-btn svg {
   width: 34px;
   height: 34px;
+}
+
+.action-badge {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  min-width: 22px;
+  padding: 0 5px;
+  border: 1px solid var(--overlay-divider);
+  border-radius: 999px;
+  background: var(--text-primary);
+  color: var(--accent-dark);
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  pointer-events: none;
 }
 
 .frame--full .caption {
@@ -1316,18 +1418,9 @@ onBeforeUnmount(() => {
     bottom: 2rem;
   }
 
-  .frame--full .like-btn {
+  .frame--full .frame-actions {
     right: 2.5rem;
     bottom: 2rem;
-  }
-
-  .frame--full .views {
-    right: 2.5rem;
-    bottom: 2rem;
-  }
-
-  .frame--full .views--with-like {
-    right: calc(2.5rem + 64px + 0.5rem);
   }
 
   .fx-dock {
@@ -1347,15 +1440,46 @@ onBeforeUnmount(() => {
 
 @media (max-width: 700px) {
   .frame--full .caption {
-    max-width: calc(100% - 6rem);
+    max-width: calc(100% - 13rem);
+  }
+
+  .frame-actions {
+    gap: 0.4rem;
+  }
+
+  .action-btn {
+    width: 48px;
+    height: 48px;
+  }
+
+  .action-btn svg {
+    width: 26px;
+    height: 26px;
+  }
+
+  .action-badge {
+    min-width: 18px;
+    font-size: 0.6rem;
+    line-height: 15px;
+  }
+
+  .views {
+    font-size: 0.8rem;
+  }
+
+  .views svg {
+    width: 17px;
+    height: 17px;
   }
 }
 
 .views--top-right,
 .frame--full .views--top-right {
+  position: absolute;
   top: 0.75rem;
   right: 0.75rem;
   bottom: auto;
+  z-index: 3;
   gap: 0.4rem;
   font-size: clamp(1.2rem, 2.2vw, 1.8rem);
   opacity: 0.5;

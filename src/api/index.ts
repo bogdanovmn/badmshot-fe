@@ -59,8 +59,51 @@ export interface ScreenshotCard {
   tournament: boolean
   players: string[]
   likes: number
+  comments: number
+  lastCommentAt: string | null
   liked: boolean
   views: number
+}
+
+export interface ScreenshotComment {
+  id: string
+  screenshotId: string
+  author: string
+  text: string
+  createdAt: string
+}
+
+export interface SharedFrame {
+  token: string
+  views: number
+  createdAt: string
+  card: ScreenshotCard
+}
+
+export interface PublicSharedFrame {
+  token: string
+  timecodeSeconds: number
+  imageFormat: string
+  width: number
+  height: number
+  createdAt: string
+  year: number | null
+  month: number | null
+  matchDate: string | null
+  clubName: string | null
+  tournament: boolean
+  players: string[]
+  likes: number
+  comments: number
+  views: number
+  shareViews: number
+}
+
+export interface UserFrameFilter {
+  playerIds: string[]
+  clubIds: string[]
+  includeIndi: boolean
+  updatedAt: string | null
 }
 
 export type ArchiveType = 'GAMES' | 'INDI'
@@ -358,6 +401,52 @@ export async function getTopScreenshots(): Promise<ScreenshotCard[]> {
 
 export async function getLikedScreenshots(): Promise<ScreenshotCard[]> {
   return authApi.get<ScreenshotCard[]>('/screenshots/liked')
+}
+
+export async function getCommentedScreenshots(): Promise<ScreenshotCard[]> {
+  return authApi.get<ScreenshotCard[]>('/screenshots/commented')
+}
+
+export async function getMyCommentedScreenshots(): Promise<ScreenshotCard[]> {
+  return authApi.get<ScreenshotCard[]>('/screenshots/mine/comments')
+}
+
+export async function getMyShares(): Promise<SharedFrame[]> {
+  return authApi.get<SharedFrame[]>('/screenshots/mine/shares')
+}
+
+export async function createScreenshotShare(id: string): Promise<{ token: string }> {
+  return authApi.post<{ token: string }>(`/screenshots/${id}/share`)
+}
+
+export async function getScreenshotComments(id: string): Promise<ScreenshotComment[]> {
+  return authApi.get<ScreenshotComment[]>(`/screenshots/${id}/comments`)
+}
+
+export async function addScreenshotComment(id: string, text: string): Promise<ScreenshotComment> {
+  return authApi.post<ScreenshotComment>(`/screenshots/${id}/comments`, { text })
+}
+
+export async function getPublicSharedFrame(token: string): Promise<PublicSharedFrame> {
+  return makeApiRequest<PublicSharedFrame>('get', `/shares/${token}`)
+}
+
+export async function registerSharedFrameView(token: string): Promise<void> {
+  await makeApiRequest('post', `/shares/${token}/view`)
+}
+
+export function sharedScreenshotUrl(token: string, width: number): string {
+  return `${apiBaseUrl}/shares/${token}/crop/${width}`
+}
+
+export async function getDefaultFrameFilter(): Promise<UserFrameFilter> {
+  return authApi.get<UserFrameFilter>('/profile/filters')
+}
+
+export async function saveDefaultFrameFilter(
+  filter: Pick<UserFrameFilter, 'playerIds' | 'clubIds' | 'includeIndi'>
+): Promise<UserFrameFilter> {
+  return authApi.put<UserFrameFilter>('/profile/filters', filter)
 }
 
 export async function likeScreenshot(id: string): Promise<void> {

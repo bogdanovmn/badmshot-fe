@@ -73,7 +73,7 @@
           :key="item.token"
           :card="item.card"
           :share-views="item.views"
-          :to="{ name: 'share', params: { token: item.token } }"
+          :to="{ path: '/explore', query: { frame: item.card.id } }"
         />
       </div>
     </section>

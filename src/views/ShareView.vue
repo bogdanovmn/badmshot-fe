@@ -7,6 +7,9 @@
       :width="1920"
       full
       views-top-right
+      :actionable="auth.isAuthenticated"
+      :busy="liking"
+      @toggle-like="toggleLike"
     >
       <template #overlay>
         <router-link class="share-badge" to="/" title="Открыть Badm Shot">
@@ -22,6 +25,8 @@
         <router-link class="stage-cta" to="/">Открыть Badm Shot</router-link>
       </template>
     </div>
+
+    <div v-if="error && card" class="toast">{{ error }}</div>
   </div>
 </template>
 
@@ -31,16 +36,21 @@ import { useRoute } from 'vue-router'
 import {
   getErrorMessage,
   getPublicSharedFrame,
-  registerSharedFrameView
+  likeScreenshot,
+  registerSharedFrameView,
+  unlikeScreenshot
 } from '@/api'
 import type { PublicSharedFrame, ScreenshotCard } from '@/api'
+import { authStore } from '@/stores/auth'
 import ErrorNotice from '@/components/ErrorNotice.vue'
 import ScreenshotFrame from '@/components/ScreenshotFrame.vue'
 
 const route = useRoute()
+const auth = authStore()
 const token = computed(() => typeof route.params.token === 'string' ? route.params.token : '')
 const frame = ref<PublicSharedFrame | null>(null)
 const loading = ref(true)
+const liking = ref(false)
 const error = ref<string | null>(null)
 
 const card = computed<ScreenshotCard | null>(() => {
@@ -49,7 +59,7 @@ const card = computed<ScreenshotCard | null>(() => {
     return null
   }
   return {
-    id: value.token,
+    id: value.screenshotId,
     matchId: '',
     timecodeSeconds: value.timecodeSeconds,
     imageFormat: value.imageFormat,
@@ -64,12 +74,40 @@ const card = computed<ScreenshotCard | null>(() => {
     tournament: value.tournament,
     players: value.players,
     likes: value.likes,
+    shares: value.shares,
     comments: value.comments,
     lastCommentAt: null,
-    liked: false,
+    liked: value.liked,
     views: value.views
   }
 })
+
+async function toggleLike() {
+  if (!frame.value || liking.value) {
+    return
+  }
+  liking.value = true
+  error.value = null
+  const current = frame.value
+  const nextLiked = !current.liked
+  frame.value = {
+    ...current,
+    liked: nextLiked,
+    likes: current.likes + (nextLiked ? 1 : -1)
+  }
+  try {
+    if (nextLiked) {
+      await likeScreenshot(current.screenshotId)
+    } else {
+      await unlikeScreenshot(current.screenshotId)
+    }
+  } catch (e) {
+    frame.value = current
+    error.value = getErrorMessage(e, 'Не удалось изменить лайк')
+  } finally {
+    liking.value = false
+  }
+}
 
 async function load() {
   loading.value = true
@@ -84,7 +122,10 @@ async function load() {
   }
 }
 
-onMounted(load)
+onMounted(() => {
+  auth.update()
+  void load()
+})
 </script>
 
 <style scoped>
@@ -158,6 +199,23 @@ onMounted(load)
   background: var(--text-primary);
   color: var(--accent-dark);
   text-decoration: none;
+}
+
+.toast {
+  position: fixed;
+  top: 5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  max-width: min(90vw, 420px);
+  padding: 0.6rem 1rem;
+  border: 1px solid var(--overlay-divider);
+  border-radius: 8px;
+  background: var(--overlay-panel);
+  color: var(--text-primary);
+  text-align: center;
+  font-size: 0.9rem;
+  backdrop-filter: blur(8px);
 }
 
 @media (min-width: 900px) {

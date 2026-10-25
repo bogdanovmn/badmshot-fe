@@ -58,6 +58,9 @@ onMounted(load)
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
 }
 
 .page-head {

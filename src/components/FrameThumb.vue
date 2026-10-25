@@ -12,6 +12,16 @@
           </svg>
           <span>{{ formatCount(card.likes) }}</span>
         </span>
+        <span class="stat" :title="`Поделились: ${formatCount(card.shares)}`">
+          <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="18" cy="5" r="3" />
+            <circle cx="6" cy="12" r="3" />
+            <circle cx="18" cy="19" r="3" />
+            <line x1="8.59" y1="10.51" x2="15.42" y2="6.49" />
+            <line x1="8.59" y1="13.49" x2="15.42" y2="17.51" />
+          </svg>
+          <span>{{ formatCount(card.shares) }}</span>
+        </span>
         <span class="stat" :title="`Комментариев: ${formatCount(card.comments)}`">
           <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />

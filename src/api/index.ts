@@ -59,6 +59,7 @@ export interface ScreenshotCard {
   tournament: boolean
   players: string[]
   likes: number
+  shares: number
   comments: number
   lastCommentAt: string | null
   liked: boolean
@@ -82,6 +83,7 @@ export interface SharedFrame {
 
 export interface PublicSharedFrame {
   token: string
+  screenshotId: string
   timecodeSeconds: number
   imageFormat: string
   width: number
@@ -94,7 +96,9 @@ export interface PublicSharedFrame {
   tournament: boolean
   players: string[]
   likes: number
+  shares: number
   comments: number
+  liked: boolean
   views: number
   shareViews: number
 }
@@ -365,6 +369,10 @@ export async function getTeaserScreenshots(): Promise<ScreenshotCard[]> {
 
 export async function getRandomScreenshot(): Promise<ScreenshotCard> {
   return authApi.get<ScreenshotCard>('/screenshots/random')
+}
+
+export async function getScreenshotCard(id: string): Promise<ScreenshotCard> {
+  return authApi.get<ScreenshotCard>(`/screenshots/${id}`)
 }
 
 export async function getNextScreenshot(filter: ScreenshotFilter = {}): Promise<ScreenshotCard> {

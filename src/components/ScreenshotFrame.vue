@@ -183,7 +183,7 @@
         </div>
 
         <button
-          v-if="showSocialActions"
+          v-if="showShareAction"
           class="action-btn"
           type="button"
           title="Поделиться кадром"
@@ -329,7 +329,8 @@ const pixelReady = ref(false)
 
 const canConfigure = computed(() => props.effects && auth.isAdmin)
 const showViews = computed(() => props.viewsTopRight || props.card.views > 1)
-const showSocialActions = computed(() => auth.isAuthenticated && !props.shareToken)
+const showSocialActions = computed(() => auth.isAuthenticated)
+const showShareAction = computed(() => auth.isAuthenticated && !props.shareToken)
 
 const saveStatusText = computed(() => {
   if (saveState.value === 'saving') {

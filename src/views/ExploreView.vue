@@ -112,6 +112,7 @@ import {
   getFrameRateLimit,
   getNextScreenshot,
   getPlayersByIds,
+  getScreenshotCard,
   isNotFound,
   isRateLimited,
   likeScreenshot,
@@ -155,6 +156,7 @@ const clock = ref(Date.now())
 
 let noticeTimer: ReturnType<typeof setTimeout> | null = null
 let clockTimer: ReturnType<typeof setInterval> | null = null
+let ignoreNextQuerySync = false
 
 const card = computed<ScreenshotCard | null>(() => history.value[historyIndex.value] ?? null)
 const canPrev = computed(() => historyIndex.value > 0)
@@ -269,6 +271,33 @@ function filter(): ScreenshotFilter {
   }
 }
 
+async function loadFrame(id: string) {
+  loading.value = true
+  error.value = null
+  noScreenshots.value = false
+  try {
+    const frame = await getScreenshotCard(id)
+    history.value = [frame]
+    historyIndex.value = 0
+  } catch (e) {
+    history.value = []
+    historyIndex.value = -1
+    error.value = getErrorMessage(e, 'Не удалось загрузить кадр')
+  } finally {
+    loading.value = false
+  }
+}
+
+async function clearFrameQuery() {
+  if (typeof route.query.frame !== 'string') {
+    return
+  }
+  ignoreNextQuerySync = true
+  const query = { ...route.query }
+  delete query.frame
+  await router.replace({ path: '/explore', query })
+}
+
 async function loadNext() {
   if (loading.value) {
     return
@@ -309,6 +338,7 @@ async function next() {
   }
   transitioning.value = true
   try {
+    await clearFrameQuery()
     if (frameRef.value) {
       await frameRef.value.runTransition(loadNext)
     } else {
@@ -402,6 +432,17 @@ watch(
     if (route.path !== '/explore') {
       return
     }
+    if (ignoreNextQuerySync) {
+      ignoreNextQuerySync = false
+      return
+    }
+    const frameId = queryValues(route.query.frame)[0] ?? null
+    if (frameId) {
+      if (frameId !== card.value?.id) {
+        await loadFrame(frameId)
+      }
+      return
+    }
     const playerIds = queryValues(route.query.players)
     const clubIds = queryValues(route.query.clubs)
     const indi = queryFlag(route.query.indi)
@@ -438,7 +479,12 @@ onMounted(async () => {
   } else {
     await loadDefaultFilter()
   }
-  await loadNext()
+  const frameId = queryValues(route.query.frame)[0] ?? null
+  if (frameId) {
+    await loadFrame(frameId)
+  } else {
+    await loadNext()
+  }
 })
 
 onBeforeUnmount(() => {

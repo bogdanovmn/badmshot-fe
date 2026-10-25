@@ -40,9 +40,13 @@
         <div class="months">
           <button
             class="month"
-            :class="{ active: isSelected(year.year, month.month) }"
+            :class="{
+              active: isSelected(year.year, month.month),
+              matched: playerId && month.matched > 0
+            }"
             v-for="month in year.months"
             :key="month.month"
+            :title="monthTitle(month)"
             @click="selectMonth(year.year, month.month)"
           >
             <span class="month-name">{{ formatMonthRu(month.month) }}</span>
@@ -149,6 +153,7 @@ import {
 } from '@/api'
 import type {
   ArchiveCapabilities,
+  ArchiveMonth,
   ArchiveSession,
   ArchiveType,
   ArchiveYear,
@@ -200,6 +205,13 @@ function isSelected(year: number, month: number): boolean {
   return selectedYear.value === year && selectedMonth.value === month
 }
 
+function monthTitle(month: ArchiveMonth): string {
+  if (!playerId.value) {
+    return `${formatMonthRu(month.month)}: ${month.matches}`
+  }
+  return `${formatMonthRu(month.month)}: ${month.matches}, с игроком — ${month.matched}`
+}
+
 function parseType(value: unknown): ArchiveType {
   return value === 'INDI' ? 'INDI' : 'GAMES'
 }
@@ -244,7 +256,7 @@ async function loadTree() {
   treeLoading.value = true
   treeError.value = null
   try {
-    tree.value = await getArchiveTree(type)
+    tree.value = await getArchiveTree(type, playerId.value ?? undefined)
     treeType.value = type
   } catch (e) {
     treeError.value = getErrorMessage(e, 'Не удалось загрузить дерево архива')
@@ -347,6 +359,10 @@ async function applyRouteQuery() {
   const typeChanged = type !== archiveType.value
   archiveType.value = type
 
+  const queryPlayerId = typeof query.playerId === 'string' ? query.playerId : null
+  const playerChanged = queryPlayerId !== playerId.value
+  playerId.value = queryPlayerId
+
   if (typeChanged || treeType.value !== type) {
     await loadTree()
     if (type === 'GAMES') {
@@ -355,23 +371,27 @@ async function applyRouteQuery() {
       clubs.value = []
       club.value = null
     }
+  } else if (playerChanged) {
+    await loadTree()
   }
 
   const year = query.year ? Number(query.year) : null
   const month = query.month ? Number(query.month) : null
-  const queryPlayerId = typeof query.playerId === 'string' ? query.playerId : null
   const changed = typeChanged
+    || playerChanged
     || year !== selectedYear.value
     || month !== selectedMonth.value
-    || queryPlayerId !== playerId.value
   selectedYear.value = year
   selectedMonth.value = month
-  playerId.value = queryPlayerId
 
   if (!year && !month) {
-    const latestYear = tree.value[0]
-    const latestMonth = latestYear?.months[0]
-    if (latestMonth) {
+    const latestYear = playerId.value
+      ? tree.value.find(item => item.matched > 0)
+      : tree.value[0]
+    const latestMonth = playerId.value
+      ? latestYear?.months.find(item => item.matched > 0)
+      : latestYear?.months[0]
+    if (latestYear && latestMonth) {
       await router.replace({
         query: queryFor(latestYear.year, latestMonth.month, queryPlayerId, type)
       })
@@ -525,6 +545,12 @@ h1 {
 
 .month:hover {
   border-color: var(--color-primary);
+}
+
+.month.matched {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
 }
 
 .month.active {

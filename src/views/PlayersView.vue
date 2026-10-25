@@ -5,7 +5,18 @@
       Псевдонимы и отображаемые имена. Псевдоним — другое имя игрока в имени файла: такие записи считаются одним игроком.
     </p>
 
-    <input v-model="term" class="search" type="text" placeholder="Поиск игрока..." />
+    <div v-if="letters.length" class="letter-filter" role="group" aria-label="Фильтр по первой букве">
+      <button
+        v-for="letter in letters"
+        :key="letter"
+        type="button"
+        class="letter-btn"
+        :class="{ active: selectedLetter === letter }"
+        @click="selectLetter(letter)"
+      >
+        {{ letter }}
+      </button>
+    </div>
 
     <ErrorNotice v-if="error" :message="error" />
     <div v-else-if="loading" class="loading">Загрузка...</div>
@@ -75,7 +86,7 @@
 
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { getErrorMessage, getPlayers, updatePlayer } from '@/api'
+import { getErrorMessage, getPlayerLetters, getPlayers, getPlayersByLetter, updatePlayer } from '@/api'
 import type { Player, PlayerAlias } from '@/api'
 import ErrorNotice from '@/components/ErrorNotice.vue'
 
@@ -86,7 +97,8 @@ interface PlayerEdit {
   alias: PlayerAlias | null
 }
 
-const term = ref('')
+const letters = ref<string[]>([])
+const selectedLetter = ref<string | null>(null)
 const players = ref<Player[]>([])
 const edits = reactive<Record<string, PlayerEdit>>({})
 const loading = ref(true)
@@ -99,13 +111,8 @@ const aliasTerm = ref('')
 const aliasOptions = ref<Player[]>([])
 const aliasLoading = ref(false)
 
-let timer: ReturnType<typeof setTimeout> | null = null
 let aliasTimer: ReturnType<typeof setTimeout> | null = null
 let aliasCloseTimer: ReturnType<typeof setTimeout> | null = null
-
-function comparePlayers(left: Player, right: Player): number {
-  return left.displayLabel.localeCompare(right.displayLabel, 'ru')
-}
 
 function aliasFor(id: string): PlayerAlias | null {
   return edits[id]?.alias ?? null
@@ -115,7 +122,14 @@ async function load() {
   loading.value = true
   error.value = null
   try {
-    players.value = await getPlayers({ term: term.value || undefined })
+    const foundLetters = await getPlayerLetters()
+    letters.value = [...foundLetters].sort((left, right) => left.localeCompare(right, 'ru'))
+    if (!selectedLetter.value || !letters.value.includes(selectedLetter.value)) {
+      selectedLetter.value = letters.value[0] ?? null
+    }
+    players.value = selectedLetter.value
+      ? await getPlayersByLetter(selectedLetter.value)
+      : []
     Object.keys(edits).forEach(key => delete edits[key])
     players.value.forEach(player => {
       edits[player.id] = {
@@ -128,6 +142,14 @@ async function load() {
   } finally {
     loading.value = false
   }
+}
+
+async function selectLetter(letter: string) {
+  if (letter === selectedLetter.value) {
+    return
+  }
+  selectedLetter.value = letter
+  await load()
 }
 
 function isDirty(player: Player): boolean {
@@ -152,36 +174,7 @@ async function save(player: Player) {
       displayName: edit.displayName || null,
       aliasPlayerId: edit.alias?.id ?? null
     })
-
-    const previousAlias = player.alias
-    const newAlias = edit.alias ? { ...edit.alias } : null
-
-    player.displayName = edit.displayName || null
-    player.displayLabel = edit.displayName || player.name
-    player.alias = newAlias
-    edit.alias = newAlias ? { ...newAlias } : null
-
-    if (newAlias) {
-      players.value = players.value.filter(option => option.id !== newAlias.id)
-      delete edits[newAlias.id]
-    }
-
-    if (previousAlias && previousAlias.id !== (newAlias?.id ?? null)) {
-      const restored: Player = {
-        id: previousAlias.id,
-        name: previousAlias.name,
-        displayName: previousAlias.displayName,
-        aliasOfPlayerId: null,
-        alias: null,
-        displayLabel: previousAlias.displayLabel
-      }
-      if (!players.value.some(option => option.id === restored.id)) {
-        players.value = [...players.value, restored]
-        edits[restored.id] = { displayName: restored.displayName || '', alias: null }
-      }
-    }
-
-    players.value = [...players.value].sort(comparePlayers)
+    await load()
     savedId.value = player.id
   } catch (e) {
     error.value = getErrorMessage(e, 'Не удалось сохранить игрока')
@@ -259,13 +252,6 @@ function selectAlias(player: Player, option: Player) {
   aliasOptions.value = []
 }
 
-watch(term, () => {
-  if (timer) {
-    clearTimeout(timer)
-  }
-  timer = setTimeout(load, 300)
-})
-
 watch(aliasTerm, () => {
   if (aliasTimer) {
     clearTimeout(aliasTimer)
@@ -275,9 +261,6 @@ watch(aliasTerm, () => {
 
 onMounted(load)
 onBeforeUnmount(() => {
-  if (timer) {
-    clearTimeout(timer)
-  }
   if (aliasTimer) {
     clearTimeout(aliasTimer)
   }
@@ -303,15 +286,32 @@ h1 {
   font-size: 0.9rem;
 }
 
-.search {
-  width: 100%;
-  max-width: 360px;
-  min-height: 40px;
-  padding: 0.5rem 0.75rem;
+.letter-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.letter-btn {
+  min-width: 38px;
+  min-height: 38px;
+  padding: 0.3rem 0.55rem;
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--color-surface);
   color: var(--color-text);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.letter-btn:hover {
+  border-color: var(--color-primary);
+}
+
+.letter-btn.active {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
 }
 
 .list {

@@ -97,11 +97,17 @@ const promo = ref(false)
 const busy = ref(false)
 const transitioning = ref(false)
 const error = ref<string | null>(null)
+const guestFramesShown = ref(0)
+
+const TEASER_PAUSE_EVERY = 5
 
 const card = computed<ScreenshotCard | null>(() =>
   promo.value ? null : history.value[historyIndex.value] ?? null
 )
-const canPrev = computed(() => historyIndex.value > 0)
+const canPrev = computed(() => auth.isAuthenticated
+  ? historyIndex.value > 0
+  : history.value.length > 1
+)
 
 async function loadTeaser() {
   busy.value = true
@@ -110,6 +116,7 @@ async function loadTeaser() {
     const cards = await getTeaserScreenshots()
     history.value = cards
     historyIndex.value = cards.length ? 0 : -1
+    guestFramesShown.value = cards.length ? 1 : 0
     if (!cards.length) {
       error.value = 'Кадры не найдены'
     }
@@ -122,6 +129,14 @@ async function loadTeaser() {
 
 async function loadNext() {
   if (busy.value) {
+    return
+  }
+  if (!auth.isAuthenticated) {
+    if (history.value.length === 0) {
+      return
+    }
+    historyIndex.value = (historyIndex.value + 1) % history.value.length
+    guestFramesShown.value++
     return
   }
   if (historyIndex.value < history.value.length - 1) {
@@ -145,8 +160,9 @@ async function next() {
   if (busy.value || transitioning.value) {
     return
   }
-  if (!auth.isAuthenticated && historyIndex.value >= history.value.length - 1) {
+  if (!auth.isAuthenticated && guestFramesShown.value >= TEASER_PAUSE_EVERY) {
     promo.value = true
+    guestFramesShown.value = 0
     return
   }
   transitioning.value = true
@@ -161,18 +177,26 @@ async function next() {
   }
 }
 
-function backToFrames() {
+async function backToFrames() {
   promo.value = false
+  await next()
 }
 
 async function prev() {
-  if (transitioning.value || historyIndex.value <= 0) {
+  if (transitioning.value || (auth.isAuthenticated && historyIndex.value <= 0)) {
+    return
+  }
+  if (!auth.isAuthenticated && history.value.length <= 1) {
     return
   }
   const swap = () => {
-    if (historyIndex.value > 0) {
-      historyIndex.value--
+    if (auth.isAuthenticated) {
+      if (historyIndex.value > 0) {
+        historyIndex.value--
+      }
+      return
     }
+    historyIndex.value = (historyIndex.value - 1 + history.value.length) % history.value.length
   }
   transitioning.value = true
   try {

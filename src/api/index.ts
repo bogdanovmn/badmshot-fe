@@ -69,6 +69,13 @@ export interface ScreenshotFilter {
   indi?: boolean
 }
 
+export interface FrameRateLimitStatus {
+  minSecondsBetweenFrames: number
+  freeFrames: number
+  freeFramesLeft: number
+  retryAfterSeconds: number
+}
+
 export interface CatalogTag {
   id: string
   label: string
@@ -139,12 +146,14 @@ export interface ArchiveMonth {
   month: number
   matches: number
   invalid: number
+  matched: number
 }
 
 export interface ArchiveYear {
   year: number
   matches: number
   invalid: number
+  matched: number
   months: ArchiveMonth[]
 }
 
@@ -317,6 +326,10 @@ export async function getNextScreenshot(filter: ScreenshotFilter = {}): Promise<
   return authApi.get<ScreenshotCard>(appendQuery('/screenshots/next', filter))
 }
 
+export async function getFrameRateLimit(): Promise<FrameRateLimitStatus> {
+  return authApi.get<FrameRateLimitStatus>('/screenshots/rate-limit')
+}
+
 export async function registerScreenshotView(id: string): Promise<void> {
   await authApi.post(`/screenshots/${id}/view`)
 }
@@ -382,18 +395,32 @@ export async function getPlayers(params: { clubId?: string; term?: string } = {}
   return makeApiRequest<Player[]>('get', '/filters/players', params)
 }
 
+export async function getPlayerLetters(): Promise<string[]> {
+  return makeApiRequest<string[]>('get', '/filters/players/letters')
+}
+
+export async function getPlayersByLetter(letter: string): Promise<Player[]> {
+  return makeApiRequest<Player[]>('get', '/filters/players', { letter })
+}
+
 export async function getPlayersByIds(ids: string[]): Promise<Player[]> {
   if (ids.length === 0) {
     return []
   }
-  return makeApiRequest<Player[]>('get', '/filters/players/by-ids', { ids })
+  return makeApiRequest<Player[]>('get', appendValues('/filters/players/by-ids', 'ids', ids))
 }
 
 export async function getClubsByIds(ids: string[]): Promise<Club[]> {
   if (ids.length === 0) {
     return []
   }
-  return makeApiRequest<Club[]>('get', '/filters/clubs/by-ids', { ids })
+  return makeApiRequest<Club[]>('get', appendValues('/filters/clubs/by-ids', 'ids', ids))
+}
+
+function appendValues(url: string, key: string, values: string[]): string {
+  const search = new URLSearchParams()
+  values.forEach(value => search.append(key, value))
+  return `${url}?${search.toString()}`
 }
 
 export async function getPlayerTags(type: ArchiveType = 'GAMES'): Promise<CatalogTag[]> {
@@ -419,8 +446,11 @@ export async function updateClub(id: string, displayName: string | null): Promis
   await authApi.put(`/clubs/${id}`, { displayName })
 }
 
-export async function getArchiveTree(type: ArchiveType = 'GAMES'): Promise<ArchiveYear[]> {
-  return authApi.get<ArchiveYear[]>('/archive/tree', { type })
+export async function getArchiveTree(
+  type: ArchiveType = 'GAMES',
+  playerId?: string
+): Promise<ArchiveYear[]> {
+  return authApi.get<ArchiveYear[]>('/archive/tree', { type, playerId })
 }
 
 export async function getArchiveCapabilities(): Promise<ArchiveCapabilities> {

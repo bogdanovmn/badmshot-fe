@@ -29,7 +29,7 @@
         <button
           class="slider-btn prev"
           type="button"
-          :disabled="!canPrev || transitioning"
+          :disabled="!canPrev || transitioning || !canRequestFrame"
           title="Предыдущий кадр"
           aria-label="Предыдущий кадр"
           @click="prev"
@@ -42,7 +42,7 @@
         <button
           class="slider-btn next"
           type="button"
-          :disabled="loading || transitioning"
+          :disabled="loading || transitioning || !canRequestFrame"
           title="Следующий кадр"
           aria-label="Следующий кадр"
           @click="next"
@@ -65,7 +65,15 @@
         </TvPlaceholder>
       </template>
       <ErrorNotice v-else-if="error" :message="error" class="stage-error-notice" />
-      <button v-else class="stage-cta" type="button" @click="next">Показать кадр</button>
+      <button
+        v-else
+        class="stage-cta"
+        type="button"
+        :disabled="!canRequestFrame"
+        @click="next"
+      >
+        {{ canRequestFrame ? 'Показать кадр' : `Подождите ${cooldownSecondsLeft} с` }}
+      </button>
       <button
         class="overlay-icon filter-btn stage-filter"
         :class="{ active: hasFilters }"
@@ -100,6 +108,7 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   getClubsByIds,
   getErrorMessage,
+  getFrameRateLimit,
   getNextScreenshot,
   getPlayersByIds,
   isNotFound,
@@ -108,7 +117,7 @@ import {
   registerScreenshotView,
   unlikeScreenshot
 } from '@/api'
-import type { Club, Player, ScreenshotCard, ScreenshotFilter } from '@/api'
+import type { Club, FrameRateLimitStatus, Player, ScreenshotCard, ScreenshotFilter } from '@/api'
 import ErrorNotice from '@/components/ErrorNotice.vue'
 import ScreenshotFrame from '@/components/ScreenshotFrame.vue'
 import ScreenshotFilterDialog from '@/components/ScreenshotFilterDialog.vue'
@@ -132,12 +141,28 @@ const error = ref<string | null>(null)
 const notice = ref<string | null>(null)
 const noScreenshots = ref(false)
 
+const DEFAULT_RATE_LIMIT: FrameRateLimitStatus = {
+  minSecondsBetweenFrames: 3,
+  freeFrames: 3,
+  freeFramesLeft: 3,
+  retryAfterSeconds: 0
+}
+const rateLimit = ref<FrameRateLimitStatus>({ ...DEFAULT_RATE_LIMIT })
+const freeFramesLeft = ref(DEFAULT_RATE_LIMIT.freeFramesLeft)
+const cooldownUntil = ref(0)
+const clock = ref(Date.now())
+
 let noticeTimer: ReturnType<typeof setTimeout> | null = null
+let clockTimer: ReturnType<typeof setInterval> | null = null
 
 const card = computed<ScreenshotCard | null>(() => history.value[historyIndex.value] ?? null)
 const canPrev = computed(() => historyIndex.value > 0)
 const selectedCount = computed(() => selectedPlayers.value.length + selectedClubs.value.length)
 const hasFilters = computed(() => selectedCount.value > 0 || includeIndi.value)
+const cooldownSecondsLeft = computed(() =>
+  Math.max(0, Math.ceil((cooldownUntil.value - clock.value) / 1000))
+)
+const canRequestFrame = computed(() => cooldownSecondsLeft.value === 0)
 
 function queryValues(value: unknown): string[] {
   if (Array.isArray(value)) {
@@ -208,6 +233,33 @@ function showNotice(message: string) {
   }, 4000)
 }
 
+function applyRateLimit(status: FrameRateLimitStatus) {
+  rateLimit.value = status
+  freeFramesLeft.value = Math.max(0, status.freeFramesLeft)
+  cooldownUntil.value = status.retryAfterSeconds > 0
+    ? Date.now() + status.retryAfterSeconds * 1000
+    : 0
+  clock.value = Date.now()
+}
+
+async function loadRateLimit() {
+  try {
+    applyRateLimit(await getFrameRateLimit())
+  } catch {
+    applyRateLimit({ ...DEFAULT_RATE_LIMIT })
+  }
+}
+
+function noteServedFrame() {
+  if (freeFramesLeft.value > 0) {
+    freeFramesLeft.value--
+  }
+  if (freeFramesLeft.value === 0) {
+    cooldownUntil.value = Date.now() + rateLimit.value.minSecondsBetweenFrames * 1000
+  }
+  clock.value = Date.now()
+}
+
 function filter(): ScreenshotFilter {
   return {
     players: selectedPlayers.value.map(player => player.id),
@@ -231,8 +283,10 @@ async function loadNext() {
     const nextCard = await getNextScreenshot(filter())
     history.value = [...history.value, nextCard]
     historyIndex.value = history.value.length - 1
+    noteServedFrame()
   } catch (e) {
     if (isRateLimited(e)) {
+      await loadRateLimit()
       showNotice('Слишком часто. Подождите несколько секунд.')
     } else if (isNotFound(e)) {
       noScreenshots.value = true
@@ -246,6 +300,10 @@ async function loadNext() {
 
 async function next() {
   if (loading.value || transitioning.value) {
+    return
+  }
+  if (!canRequestFrame.value) {
+    showNotice(`Подождите ${cooldownSecondsLeft.value} с.`)
     return
   }
   transitioning.value = true
@@ -262,6 +320,10 @@ async function next() {
 
 async function prev() {
   if (transitioning.value || historyIndex.value <= 0) {
+    return
+  }
+  if (!canRequestFrame.value) {
+    showNotice(`Подождите ${cooldownSecondsLeft.value} с.`)
     return
   }
   const swap = () => {
@@ -349,6 +411,10 @@ watch(
 )
 
 onMounted(async () => {
+  clockTimer = setInterval(() => {
+    clock.value = Date.now()
+  }, 250)
+  await loadRateLimit()
   const playerIds = queryValues(route.query.players)
   const clubIds = queryValues(route.query.clubs)
   includeIndi.value = queryFlag(route.query.indi)
@@ -361,6 +427,9 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   if (noticeTimer) {
     clearTimeout(noticeTimer)
+  }
+  if (clockTimer) {
+    clearInterval(clockTimer)
   }
 })
 </script>
@@ -406,9 +475,14 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
-.stage-cta:hover {
+.stage-cta:hover:not(:disabled) {
   background: var(--text-primary);
   color: var(--accent-dark);
+}
+
+.stage-cta:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .overlay-icon {

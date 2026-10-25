@@ -1,5 +1,5 @@
 <template>
-  <figure class="frame" :class="{ 'frame--full': full }">
+  <figure class="frame" :class="{ 'frame--full': full, 'frame--admin': auth.isAdmin }">
     <div
       class="image-wrap"
       :class="{ 'effect-halftone': halftone, 'effect-blur': blur }"
@@ -29,8 +29,21 @@
       <div v-if="blur" class="fx-vignette" aria-hidden="true"></div>
       <div v-if="showMeta" class="bottom-scrim" aria-hidden="true"></div>
 
-      <div v-if="canConfigure" class="fx-dock">
+      <div v-if="canConfigure || auth.isAdmin" class="fx-dock">
+        <router-link
+          v-if="auth.isAdmin"
+          class="fx-btn"
+          :to="`/archive/matches/${card.matchId}`"
+          title="Редактировать кадр"
+          aria-label="Редактировать кадр"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z" />
+          </svg>
+        </router-link>
         <button
+          v-if="canConfigure"
           class="fx-btn"
           type="button"
           :class="{ active: effectsOpen }"
@@ -52,7 +65,11 @@
         </button>
       </div>
 
-      <div v-if="canConfigure && effectsOpen" class="fx-controls">
+      <div
+        v-if="canConfigure && effectsOpen"
+        class="fx-controls"
+        :class="{ 'fx-controls--with-edit': auth.isAdmin }"
+      >
         <div class="fx-item">
           <label class="fx-toggle">
             <input v-model="halftone" type="checkbox" />
@@ -661,6 +678,7 @@ watch(
 )
 
 onMounted(() => {
+  auth.update()
   applySettings(settingsStore.settings)
   if (pixelate.value) {
     schedulePixelRender()
@@ -852,6 +870,10 @@ onBeforeUnmount(() => {
   backdrop-filter: blur(8px);
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+.fx-controls--with-edit {
+  top: calc(0.75rem + 2 * 64px + 2 * 0.45rem);
 }
 
 .fx-save {
@@ -1078,6 +1100,10 @@ onBeforeUnmount(() => {
     top: calc(1.25rem + 64px + 0.45rem);
     right: 2rem;
   }
+
+  .fx-controls--with-edit {
+    top: calc(1.25rem + 2 * 64px + 2 * 0.45rem);
+  }
 }
 
 @media (max-width: 700px) {
@@ -1101,10 +1127,18 @@ onBeforeUnmount(() => {
   height: clamp(24px, 3vw, 32px);
 }
 
+.frame--admin .views--top-right {
+  right: calc(0.75rem + 64px + 0.5rem);
+}
+
 @media (min-width: 900px) {
   .frame--full .views--top-right {
     top: 1.25rem;
     right: 2rem;
+  }
+
+  .frame--admin.frame--full .views--top-right {
+    right: calc(2rem + 64px + 0.5rem);
   }
 }
 </style>

@@ -91,7 +91,7 @@
             <span class="session-main">
               <span class="session-date">{{ sessionDateLabel(session) }}</span>
               <span class="session-club">{{ sessionTitle(session) }}</span>
-              <span v-if="session.tournament" class="session-tournament">турнир</span>
+              <span v-if="session.tournament" class="session-tournament">{{ session.group ? `турнир · ${session.group}` : 'турнир' }}</span>
             </span>
             <span class="session-meta">
               <span>{{ session.matches }} {{ unitLabel }}</span>
@@ -120,6 +120,7 @@
             >
               <span class="file-main">
                 <span class="file-players">{{ file.players.join(' / ') || 'Без игроков' }}</span>
+                <span v-if="file.comment" class="file-comment">{{ file.comment }}</span>
                 <span v-if="file.validationError" class="file-error">{{ file.validationError }}</span>
               </span>
               <span class="file-meta">
@@ -714,6 +715,13 @@ h2 {
 .file-error {
   color: var(--color-danger);
   font-size: 0.8rem;
+}
+
+.file-comment {
+  color: var(--color-muted);
+  font-size: 0.8rem;
+  font-style: italic;
+  overflow-wrap: anywhere;
 }
 
 .file-meta {

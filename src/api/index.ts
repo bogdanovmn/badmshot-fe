@@ -95,6 +95,8 @@ export interface MatchBrief {
   clubId: string | null
   clubName: string | null
   tournament: boolean
+  group: string | null
+  comment: string | null
   durationSeconds: number | null
   sizeMbytes: number
   validationError: string | null
@@ -113,6 +115,8 @@ export interface Match {
   clubId: string | null
   clubName: string | null
   tournament: boolean
+  group: string | null
+  comment: string | null
   durationSeconds: number | null
   sizeMbytes: number
   validationError: string | null
@@ -152,6 +156,7 @@ export interface ArchiveSessionFile {
   durationSeconds: number | null
   screenshots: number
   validationError: string | null
+  comment: string | null
 }
 
 export interface ArchiveSession {
@@ -165,10 +170,12 @@ export interface ArchiveSession {
   club: string | null
   clubName: string | null
   tournament: boolean
+  group: string | null
   matches: number
   sizeMbytes: number
   durationSeconds: number
   invalid: number
+  comment: string | null
   exportable: boolean
   files: ArchiveSessionFile[]
 }

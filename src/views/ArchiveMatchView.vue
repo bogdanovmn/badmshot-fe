@@ -17,7 +17,10 @@
             <span class="label">Клуб</span><span>{{ detail.match.clubName || '—' }}</span>
           </div>
           <div v-if="detail.match.type === 'GAMES'" class="info-item">
-            <span class="label">Турнир</span><span>{{ detail.match.tournament ? 'да' : 'нет' }}</span>
+            <span class="label">Турнир</span><span>{{ tournamentLabel }}</span>
+          </div>
+          <div v-if="detail.match.comment" class="info-item">
+            <span class="label">Комментарий</span><span>{{ detail.match.comment }}</span>
           </div>
           <div class="info-item"><span class="label">Длительность</span><span>{{ formatDurationHuman(detail.match.durationSeconds) }}</span></div>
           <div class="info-item"><span class="label">Размер</span><span>{{ formatBytesHuman(detail.match.sizeMbytes) }}</span></div>
@@ -113,6 +116,14 @@ const typeLabel = computed(() => isIndi.value
   : 'Игровой матч')
 
 const pageTitle = computed(() => isIndi.value ? 'Тренировка' : 'Матч')
+
+const tournamentLabel = computed(() => {
+  if (!detail.value?.match.tournament) {
+    return 'нет'
+  }
+  const group = detail.value.match.group
+  return group ? `да · группа ${group}` : 'да'
+})
 
 const editPlayers = ref<string[]>([])
 const saving = ref(false)

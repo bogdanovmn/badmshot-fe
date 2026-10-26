@@ -16,6 +16,13 @@ const router = createRouter({
       component: () => import('@/views/FrameSequenceView.vue'),
       meta: { private: true, immersive: true, sequence: 'top' }
     },
+    { path: '/comments', component: () => import('@/views/CommentedView.vue'), meta: { private: true } },
+    {
+      path: '/comments/:id',
+      name: 'comments-frame',
+      component: () => import('@/views/FrameSequenceView.vue'),
+      meta: { private: true, immersive: true, sequence: 'comments' }
+    },
     { path: '/stats', alias: '/tags', component: () => import('@/views/TagsView.vue'), meta: { private: true } },
     { path: '/explore', component: () => import('@/views/ExploreView.vue'), meta: { private: true, immersive: true } },
     { path: '/liked', component: () => import('@/views/LikedView.vue'), meta: { private: true } },
@@ -25,6 +32,14 @@ const router = createRouter({
       component: () => import('@/views/FrameSequenceView.vue'),
       meta: { private: true, immersive: true, sequence: 'liked' }
     },
+    { path: '/profile', component: () => import('@/views/ProfileView.vue'), meta: { private: true } },
+    {
+      path: '/profile/comments/:id',
+      name: 'profile-comment-frame',
+      component: () => import('@/views/FrameSequenceView.vue'),
+      meta: { private: true, immersive: true, sequence: 'profile-comments' }
+    },
+    { path: '/s/:token', name: 'share', component: () => import('@/views/ShareView.vue'), meta: { immersive: true } },
     { path: '/faq', component: () => import('@/views/FaqView.vue') },
     {
       path: '/login',

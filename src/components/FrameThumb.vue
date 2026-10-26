@@ -1,5 +1,5 @@
 <template>
-  <router-link :to="to" class="thumb" :aria-label="thumbAlt">
+  <component :is="linkComponent" :to="to" class="thumb" :aria-label="thumbAlt">
     <div class="thumb-media">
       <ScreenshotImage :id="card.id" :width="1200" :alt="thumbAlt" />
 
@@ -12,12 +12,38 @@
           </svg>
           <span>{{ formatCount(card.likes) }}</span>
         </span>
+        <span class="stat" :title="`Поделились: ${formatCount(card.shares)}`">
+          <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="18" cy="5" r="3" />
+            <circle cx="6" cy="12" r="3" />
+            <circle cx="18" cy="19" r="3" />
+            <line x1="8.59" y1="10.51" x2="15.42" y2="6.49" />
+            <line x1="8.59" y1="13.49" x2="15.42" y2="17.51" />
+          </svg>
+          <span>{{ formatCount(card.shares) }}</span>
+        </span>
+        <span class="stat" :title="`Комментариев: ${formatCount(card.comments)}`">
+          <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+          <span>{{ formatCount(card.comments) }}</span>
+        </span>
         <span class="stat" :title="`Просмотров: ${formatCount(card.views)}`">
           <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
             <circle cx="12" cy="12" r="3" />
           </svg>
           <span>{{ formatCount(card.views) }}</span>
+        </span>
+        <span v-if="shareViews !== undefined" class="stat" :title="`Просмотров по ссылке: ${formatCount(shareViews)}`">
+          <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="18" cy="5" r="3" />
+            <circle cx="6" cy="12" r="3" />
+            <circle cx="18" cy="19" r="3" />
+            <line x1="8.59" y1="10.51" x2="15.42" y2="6.49" />
+            <line x1="8.59" y1="13.49" x2="15.42" y2="17.51" />
+          </svg>
+          <span>{{ formatCount(shareViews) }}</span>
         </span>
       </div>
 
@@ -29,11 +55,12 @@
         </div>
       </div>
     </div>
-  </router-link>
+  </component>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { RouterLink } from 'vue-router'
 import type { RouteLocationRaw } from 'vue-router'
 import type { ScreenshotCard } from '@/api'
 import { formatDateRu } from '@/common'
@@ -41,8 +68,11 @@ import ScreenshotImage from '@/components/ScreenshotImage.vue'
 
 const props = defineProps<{
   card: ScreenshotCard
-  to: RouteLocationRaw
+  to?: RouteLocationRaw
+  shareViews?: number
 }>()
+
+const linkComponent = computed(() => props.to ? RouterLink : 'div')
 
 const thumbAlt = computed(() => props.card.players.length
   ? `Кадр: ${props.card.players.join(', ')}`
@@ -118,8 +148,11 @@ function formatDate(value: string): string {
   right: 0.85rem;
   z-index: 3;
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.9rem;
+  justify-content: flex-end;
+  gap: 0.55rem 0.9rem;
+  max-width: calc(100% - 1.6rem);
   color: var(--text-primary);
   font-size: 0.85rem;
   font-weight: 600;

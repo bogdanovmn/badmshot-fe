@@ -11,6 +11,8 @@ export const DEFAULT_FRAME_EFFECTS: FrameEffectSettings = {
   pixelate: true,
   pixelStrength: 0,
   pixelColors: 10,
+  edgePixelate: true,
+  edgePixelStrength: 60,
   transitionEnabled: true,
   transitionDuration: 3000,
   transitionPixels: 100
@@ -34,6 +36,8 @@ export function normalizeFrameEffects(value: Partial<FrameEffectSettings> | null
     pixelate: boolOr(value?.pixelate, DEFAULT_FRAME_EFFECTS.pixelate),
     pixelStrength: numberOr(value?.pixelStrength, DEFAULT_FRAME_EFFECTS.pixelStrength, 0, 100),
     pixelColors: numberOr(value?.pixelColors, DEFAULT_FRAME_EFFECTS.pixelColors, 2, 16),
+    edgePixelate: boolOr(value?.edgePixelate, DEFAULT_FRAME_EFFECTS.edgePixelate),
+    edgePixelStrength: numberOr(value?.edgePixelStrength, DEFAULT_FRAME_EFFECTS.edgePixelStrength, 0, 100),
     transitionEnabled: boolOr(value?.transitionEnabled, DEFAULT_FRAME_EFFECTS.transitionEnabled),
     transitionDuration: numberOr(value?.transitionDuration, DEFAULT_FRAME_EFFECTS.transitionDuration, 400, 15000),
     transitionPixels: numberOr(value?.transitionPixels, DEFAULT_FRAME_EFFECTS.transitionPixels, 0, 100)

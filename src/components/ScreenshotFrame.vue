@@ -1,9 +1,9 @@
 <template>
-  <figure class="frame" :class="{ 'frame--full': full }">
+  <figure class="frame" :class="{ 'frame--full': full, 'frame--admin': auth.isAdmin }">
     <div
       class="image-wrap"
       :class="{ 'effect-halftone': halftone, 'effect-blur': blur }"
-      :style="[aspectStyle, effectStyle]"
+      :style="[full ? null : aspectStyle, effectStyle]"
     >
       <div v-if="!loaded" class="placeholder">Загрузка кадра...</div>
       <img
@@ -19,7 +19,7 @@
       <canvas
         ref="pixelCanvas"
         class="fx-pixel"
-        :class="{ visible: pixelReady && (pixelate || transitionBoost > 0.001) }"
+        :class="{ visible: pixelReady && pixelEffectsActive() }"
         :style="{ filter: imageFilter }"
         aria-hidden="true"
       ></canvas>
@@ -29,8 +29,21 @@
       <div v-if="blur" class="fx-vignette" aria-hidden="true"></div>
       <div v-if="showMeta" class="bottom-scrim" aria-hidden="true"></div>
 
-      <div v-if="canConfigure" class="fx-dock">
+      <div v-if="canConfigure || auth.isAdmin" class="fx-dock">
+        <router-link
+          v-if="auth.isAdmin"
+          class="fx-btn"
+          :to="`/archive/matches/${card.matchId}`"
+          title="Редактировать кадр"
+          aria-label="Редактировать кадр"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z" />
+          </svg>
+        </router-link>
         <button
+          v-if="canConfigure"
           class="fx-btn"
           type="button"
           :class="{ active: effectsOpen }"
@@ -52,7 +65,11 @@
         </button>
       </div>
 
-      <div v-if="canConfigure && effectsOpen" class="fx-controls">
+      <div
+        v-if="canConfigure && effectsOpen"
+        class="fx-controls"
+        :class="{ 'fx-controls--with-edit': auth.isAdmin }"
+      >
         <div class="fx-item">
           <label class="fx-toggle">
             <input v-model="halftone" type="checkbox" />
@@ -87,6 +104,17 @@
           <label v-if="pixelate" class="fx-slider">
             <span>Цвета <em>{{ pixelColors }}</em></span>
             <input v-model.number="pixelColors" type="range" min="2" max="16" step="1" />
+          </label>
+        </div>
+
+        <div class="fx-item">
+          <label class="fx-toggle">
+            <input v-model="edgePixelate" type="checkbox" />
+            <span>Пиксели к краям</span>
+          </label>
+          <label v-if="edgePixelate" class="fx-slider">
+            <span>Сила <em>{{ edgePixelStrength }}</em></span>
+            <input v-model.number="edgePixelStrength" type="range" min="0" max="100" step="1" />
           </label>
         </div>
 
@@ -130,9 +158,8 @@
       <slot name="overlay"></slot>
 
       <div
-        v-if="showViews"
-        class="views"
-        :class="{ 'views--with-like': actionable && !viewsTopRight, 'views--top-right': viewsTopRight }"
+        v-if="showViews && viewsTopRight"
+        class="views views--top-right"
         :title="`Просмотров: ${formatViews(card.views)}`"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -142,19 +169,79 @@
         <span>{{ formatViews(card.views) }}</span>
       </div>
 
-      <button
-        v-if="actionable"
-        class="like-btn"
-        :class="{ active: card.liked }"
-        :disabled="busy"
-        :title="card.liked ? 'Убрать из любимых' : 'В любимые'"
-        :aria-label="card.liked ? 'Убрать из любимых' : 'В любимые'"
-        @click="emit('toggle-like')"
-      >
-        <svg viewBox="0 0 24 24" :fill="card.liked ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-        </svg>
-      </button>
+      <div v-if="showViews || actionable || showSocialActions" class="frame-actions">
+        <div
+          v-if="showViews && !viewsTopRight"
+          class="views"
+          :title="`Просмотров: ${formatViews(card.views)}`"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+          <span>{{ formatViews(card.views) }}</span>
+        </div>
+
+        <button
+          v-if="showShareAction"
+          class="action-btn"
+          type="button"
+          title="Поделиться кадром"
+          aria-label="Поделиться кадром"
+          @click="shareOpen = true"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="18" cy="5" r="3" />
+            <circle cx="6" cy="12" r="3" />
+            <circle cx="18" cy="19" r="3" />
+            <line x1="8.59" y1="10.51" x2="15.42" y2="6.49" />
+            <line x1="8.59" y1="13.49" x2="15.42" y2="17.51" />
+          </svg>
+        </button>
+
+        <button
+          v-if="showSocialActions"
+          class="action-btn comment-btn"
+          type="button"
+          :title="commentsCount > 0 ? `Комментарии: ${formatViews(commentsCount)}` : 'Комментировать'"
+          aria-label="Комментарии"
+          @click="commentsOpen = true"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            <line x1="8" y1="9" x2="16" y2="9" />
+            <line x1="8" y1="13" x2="13" y2="13" />
+          </svg>
+          <span v-if="commentsCount > 0" class="action-badge">{{ formatViews(commentsCount) }}</span>
+        </button>
+
+        <button
+          v-if="actionable"
+          class="action-btn like-btn"
+          :class="{ active: card.liked }"
+          :disabled="busy"
+          :title="card.liked ? 'Убрать из любимых' : 'В любимые'"
+          :aria-label="card.liked ? 'Убрать из любимых' : 'В любимые'"
+          @click="emit('toggle-like')"
+        >
+          <svg viewBox="0 0 24 24" :fill="card.liked ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+          </svg>
+        </button>
+      </div>
+
+      <CommentsDialog
+        v-if="commentsOpen"
+        :screenshot-id="card.id"
+        @close="commentsOpen = false"
+        @created="onCommentCreated"
+      />
+
+      <ShareDialog
+        v-if="shareOpen"
+        :screenshot-id="card.id"
+        @close="shareOpen = false"
+      />
     </div>
   </figure>
 </template>
@@ -163,10 +250,12 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { CSSProperties } from 'vue'
 import type { FrameEffectSettings, ScreenshotCard } from '@/api'
-import { screenshotImageUrl } from '@/api'
+import { screenshotImageUrl, sharedScreenshotUrl } from '@/api'
 import { formatDateRu } from '@/common'
 import { DEFAULT_FRAME_EFFECTS, frameEffectsStore } from '@/stores/frameEffects'
 import { authStore } from '@/stores/auth'
+import CommentsDialog from '@/components/CommentsDialog.vue'
+import ShareDialog from '@/components/ShareDialog.vue'
 
 const BAYER = [
   [0, 8, 2, 10],
@@ -174,6 +263,15 @@ const BAYER = [
   [3, 11, 1, 9],
   [15, 7, 13, 5]
 ]
+
+// Граница зоны прогрессивной пикселизации сверху и снизу (доля от высоты кадра).
+const EDGE_BAND_Y = 0.2
+
+interface PixelCell {
+  x: number
+  y: number
+  size: number
+}
 
 const props = withDefaults(defineProps<{
   card: ScreenshotCard
@@ -184,6 +282,7 @@ const props = withDefaults(defineProps<{
   full?: boolean
   effects?: boolean
   viewsTopRight?: boolean
+  shareToken?: string
 }>(), {
   width: 640,
   showMeta: true,
@@ -191,7 +290,8 @@ const props = withDefaults(defineProps<{
   busy: false,
   full: false,
   effects: false,
-  viewsTopRight: false
+  viewsTopRight: false,
+  shareToken: ''
 })
 
 const emit = defineEmits<{ 'toggle-like': [] }>()
@@ -208,6 +308,8 @@ const blurStrength = ref(DEFAULT_FRAME_EFFECTS.blurStrength)
 const pixelate = ref(DEFAULT_FRAME_EFFECTS.pixelate)
 const pixelStrength = ref(DEFAULT_FRAME_EFFECTS.pixelStrength)
 const pixelColors = ref(DEFAULT_FRAME_EFFECTS.pixelColors)
+const edgePixelate = ref(DEFAULT_FRAME_EFFECTS.edgePixelate)
+const edgePixelStrength = ref(DEFAULT_FRAME_EFFECTS.edgePixelStrength)
 
 const transitionEnabled = ref(DEFAULT_FRAME_EFFECTS.transitionEnabled)
 const transitionDuration = ref(DEFAULT_FRAME_EFFECTS.transitionDuration)
@@ -217,12 +319,18 @@ const transitionBoost = ref(0)
 const saveState = ref<'idle' | 'saving' | 'saved' | 'error'>('idle')
 const settingsDirty = ref(false)
 
+const commentsOpen = ref(false)
+const shareOpen = ref(false)
+const commentsCount = ref(props.card.comments)
+
 const frameImg = ref<HTMLImageElement | null>(null)
 const pixelCanvas = ref<HTMLCanvasElement | null>(null)
 const pixelReady = ref(false)
 
 const canConfigure = computed(() => props.effects && auth.isAdmin)
 const showViews = computed(() => props.viewsTopRight || props.card.views > 1)
+const showSocialActions = computed(() => auth.isAuthenticated)
+const showShareAction = computed(() => auth.isAuthenticated && !props.shareToken)
 
 const saveStatusText = computed(() => {
   if (saveState.value === 'saving') {
@@ -252,10 +360,19 @@ async function loadImage() {
   const version = ++imageVersion
   loaded.value = false
   invalidatePixelSource()
+  const targetWidth = props.full ? props.card.width : props.width
+  if (props.shareToken) {
+    releaseObjectUrl()
+    url.value = sharedScreenshotUrl(props.shareToken, targetWidth)
+    if (pixelEffectsActive()) {
+      schedulePixelRender()
+    }
+    return
+  }
   try {
     const nextUrl = await screenshotImageUrl(
       props.card.id,
-      props.full ? props.card.width : props.width
+      targetWidth
     )
     if (version !== imageVersion) {
       if (nextUrl.startsWith('blob:')) {
@@ -270,7 +387,7 @@ async function loadImage() {
       await nextTick()
       URL.revokeObjectURL(previous)
     }
-    if (pixelate.value || transitionBoost.value > 0.001) {
+    if (pixelEffectsActive()) {
       schedulePixelRender()
     } else {
       pixelReady.value = false
@@ -349,6 +466,8 @@ function applySettings(settings: FrameEffectSettings) {
   pixelate.value = settings.pixelate
   pixelStrength.value = settings.pixelStrength
   pixelColors.value = settings.pixelColors
+  edgePixelate.value = settings.edgePixelate
+  edgePixelStrength.value = settings.edgePixelStrength
   transitionEnabled.value = settings.transitionEnabled
   transitionDuration.value = settings.transitionDuration
   transitionPixels.value = settings.transitionPixels
@@ -363,6 +482,8 @@ function currentSettings(): FrameEffectSettings {
     pixelate: pixelate.value,
     pixelStrength: pixelStrength.value,
     pixelColors: pixelColors.value,
+    edgePixelate: edgePixelate.value,
+    edgePixelStrength: edgePixelStrength.value,
     transitionEnabled: transitionEnabled.value,
     transitionDuration: transitionDuration.value,
     transitionPixels: transitionPixels.value
@@ -398,6 +519,7 @@ let renderBusy = false
 let renderQueued = false
 let lastRenderAt = 0
 let transitionRaf = 0
+let edgeSampleCanvas: HTMLCanvasElement | null = null
 
 const transitionRunning = ref(false)
 
@@ -447,6 +569,194 @@ function currentPixelColors(): number {
   return Math.max(2, reduced)
 }
 
+function pixelEffectsActive(): boolean {
+  return pixelate.value || edgePixelate.value || transitionBoost.value > 0.001
+}
+
+function edgeRamp(distance: number, band: number): number {
+  if (band <= 0) {
+    return 0
+  }
+  const value = clamp(1 - distance / band, 0, 1)
+  return value * value * (3 - 2 * value)
+}
+
+function edgeFactorAt(y: number, height: number): number {
+  return edgeRamp(Math.min(y, height - y), height * EDGE_BAND_Y)
+}
+
+function blockSizeAt(
+  y: number,
+  height: number,
+  base: number,
+  edgeMax: number
+): number {
+  return base + (edgeMax - base) * edgeFactorAt(y, height)
+}
+
+function edgeMaxBlock(width: number): number {
+  if (!edgePixelate.value) {
+    return 0
+  }
+  const strength = clamp(edgePixelStrength.value, 0, 100) / 100
+  if (strength <= 0) {
+    return 0
+  }
+  const base = Math.max(1, currentPixelBlock())
+  // Крупный блок у самой кромки: масштабируется вместе с кадром,
+  // добавляется к базовой пикселизации и плавно зависит от силы эффекта.
+  return base + (1.5 + width * 0.032) * strength
+}
+
+function buildEdgeCells(width: number, height: number, base: number, edgeMax: number): PixelCell[] {
+  const cells: PixelCell[] = []
+  const bandY = height * EDGE_BAND_Y
+  const rootSize = Math.max(2, Math.round(edgeMax))
+  const minBase = Math.max(1, base)
+  // Мелкие блоки в начале рампы визуально неразличимы, но дают тысячи
+  // прямоугольников. Отсекаем их, чтобы анимация оставалась плавной.
+  const noiseFloor = Math.max(minBase + 0.75, 3.25)
+  const stack: PixelCell[] = []
+
+  for (let y = 0; y < height; y += rootSize) {
+    for (let x = 0; x < width; x += rootSize) {
+      stack.push({ x, y, size: rootSize })
+    }
+  }
+
+  while (stack.length) {
+    const cell = stack.pop()!
+    const y1 = Math.min(height, cell.y + cell.size)
+    const inCenter = cell.y >= bandY && y1 <= height - bandY
+    if (inCenter) {
+      continue
+    }
+
+    // Точка внутри ячейки с максимальной силой эффекта — ближайшая к кромке.
+    const outerY = cell.y <= height - y1 ? cell.y : y1
+    const localMax = blockSizeAt(outerY, height, base, edgeMax)
+    if (localMax <= noiseFloor) {
+      continue
+    }
+
+    if (cell.size > localMax * 1.3 && cell.size > minBase + 0.5) {
+      const half = cell.size / 2
+      if (half < 0.75) {
+        cells.push(cell)
+        continue
+      }
+      stack.push({ x: cell.x, y: cell.y, size: half })
+      stack.push({ x: cell.x + half, y: cell.y, size: half })
+      stack.push({ x: cell.x, y: cell.y + half, size: half })
+      stack.push({ x: cell.x + half, y: cell.y + half, size: half })
+      continue
+    }
+
+    cells.push(cell)
+  }
+
+  return cells
+}
+
+function averageCellColor(
+  data: Uint8ClampedArray,
+  sampleWidth: number,
+  sampleHeight: number,
+  scaleX: number,
+  scaleY: number,
+  cell: PixelCell
+): [number, number, number] | null {
+  const x0 = clamp(Math.floor(cell.x * scaleX), 0, sampleWidth - 1)
+  const y0 = clamp(Math.floor(cell.y * scaleY), 0, sampleHeight - 1)
+  const x1 = clamp(Math.ceil((cell.x + cell.size) * scaleX), x0 + 1, sampleWidth)
+  const y1 = clamp(Math.ceil((cell.y + cell.size) * scaleY), y0 + 1, sampleHeight)
+  let red = 0
+  let green = 0
+  let blue = 0
+  let count = 0
+  for (let row = y0; row < y1; row++) {
+    const offset = row * sampleWidth
+    for (let column = x0; column < x1; column++) {
+      const index = (offset + column) * 4
+      red += data[index]
+      green += data[index + 1]
+      blue += data[index + 2]
+      count++
+    }
+  }
+  if (!count) {
+    return null
+  }
+  return [red / count, green / count, blue / count]
+}
+
+function quantizeColor(value: number, step: number, threshold: number): number {
+  return clamp(Math.round((value + threshold) / step) * step, 0, 255)
+}
+
+function drawEdgeCells(
+  context: CanvasRenderingContext2D,
+  source: HTMLImageElement,
+  width: number,
+  height: number,
+  cells: PixelCell[],
+  base: number,
+  colors: number,
+  dither: boolean
+) {
+  const sampleStep = Math.max(2, Math.round(Math.max(base, 1) / 2))
+  const sampleWidth = Math.max(1, Math.ceil(width / sampleStep))
+  const sampleHeight = Math.max(1, Math.ceil(height / sampleStep))
+  if (!edgeSampleCanvas) {
+    edgeSampleCanvas = document.createElement('canvas')
+  }
+  const sample = edgeSampleCanvas
+  sample.width = sampleWidth
+  sample.height = sampleHeight
+  const sampleContext = sample.getContext('2d', { willReadFrequently: true })
+  if (!sampleContext) {
+    return
+  }
+  sampleContext.imageSmoothingEnabled = true
+  sampleContext.drawImage(source, 0, 0, sampleWidth, sampleHeight)
+
+  let data: Uint8ClampedArray
+  try {
+    data = sampleContext.getImageData(0, 0, sampleWidth, sampleHeight).data
+  } catch {
+    return
+  }
+
+  const scaleX = sampleWidth / width
+  const scaleY = sampleHeight / height
+  const levels = Math.max(2, Math.round(colors))
+  const step = 255 / (levels - 1)
+  const grid = Math.max(1, Math.round(base))
+
+  for (const cell of cells) {
+    const color = averageCellColor(data, sampleWidth, sampleHeight, scaleX, scaleY, cell)
+    if (!color) {
+      continue
+    }
+    let [red, green, blue] = color
+    if (dither) {
+      const threshold = (BAYER[Math.floor(cell.y / grid) % 4][Math.floor(cell.x / grid) % 4] / 16 - 0.5) * step
+      red = quantizeColor(red, step, threshold)
+      green = quantizeColor(green, step, threshold)
+      blue = quantizeColor(blue, step, threshold)
+    }
+    const x = Math.round(cell.x)
+    const y = Math.round(cell.y)
+    const cellWidth = Math.round(Math.min(width, cell.x + cell.size)) - x
+    const cellHeight = Math.round(Math.min(height, cell.y + cell.size)) - y
+    if (cellWidth <= 0 || cellHeight <= 0) {
+      continue
+    }
+    context.fillStyle = `rgb(${Math.round(red)}, ${Math.round(green)}, ${Math.round(blue)})`
+    context.fillRect(x, y, cellWidth, cellHeight)
+  }
+}
+
 async function drawPixelCanvas(
   canvas: HTMLCanvasElement | null,
   block: number,
@@ -463,46 +773,67 @@ async function drawPixelCanvas(
 
   const width = Math.max(1, props.card.width || source.naturalWidth)
   const height = Math.max(1, props.card.height || source.naturalHeight)
-  const size = Math.max(1, Math.round(block))
-  const smallWidth = Math.max(1, Math.floor(width / size))
-  const smallHeight = Math.max(1, Math.floor(height / size))
+  const base = Math.max(1, block)
+  const size = Math.max(1, Math.round(base))
+  const edgeMax = edgeMaxBlock(width)
+  const hasBase = size > 1
+  const hasEdge = edgeMax > base + 0.75
 
-  const small = document.createElement('canvas')
-  small.width = smallWidth
-  small.height = smallHeight
-  const smallContext = small.getContext('2d', { willReadFrequently: true })
-  if (!smallContext) {
-    return false
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width
+    canvas.height = height
   }
-  smallContext.imageSmoothingEnabled = true
-  smallContext.drawImage(source, 0, 0, smallWidth, smallHeight)
-
-  if (dither) {
-    let pixels: ImageData
-    try {
-      pixels = smallContext.getImageData(0, 0, smallWidth, smallHeight)
-    } catch {
-      return false
-    }
-    applyDither(pixels, colors)
-    smallContext.putImageData(pixels, 0, 0)
-  }
-
-  canvas.width = width
-  canvas.height = height
   const context = canvas.getContext('2d')
   if (!context) {
     return false
   }
   context.imageSmoothingEnabled = false
   context.clearRect(0, 0, width, height)
-  context.drawImage(small, 0, 0, smallWidth, smallHeight, 0, 0, width, height)
+
+  if (!hasBase && !hasEdge) {
+    return false
+  }
+
+  if (hasBase) {
+    const smallWidth = Math.max(1, Math.floor(width / size))
+    const smallHeight = Math.max(1, Math.floor(height / size))
+
+    const small = document.createElement('canvas')
+    small.width = smallWidth
+    small.height = smallHeight
+    const smallContext = small.getContext('2d', { willReadFrequently: true })
+    if (!smallContext) {
+      return false
+    }
+    smallContext.imageSmoothingEnabled = true
+    smallContext.drawImage(source, 0, 0, smallWidth, smallHeight)
+
+    if (dither) {
+      let pixels: ImageData
+      try {
+        pixels = smallContext.getImageData(0, 0, smallWidth, smallHeight)
+      } catch {
+        return false
+      }
+      applyDither(pixels, colors)
+      smallContext.putImageData(pixels, 0, 0)
+    }
+
+    context.drawImage(small, 0, 0, smallWidth, smallHeight, 0, 0, width, height)
+  }
+
+  if (hasEdge) {
+    const cells = buildEdgeCells(width, height, base, edgeMax)
+    if (cells.length) {
+      drawEdgeCells(context, source, width, height, cells, base, colors, dither)
+    }
+  }
+
   return true
 }
 
 async function renderPixelArt() {
-  const active = pixelate.value || transitionBoost.value > 0.001
-  if (!active) {
+  if (!pixelEffectsActive()) {
     pixelReady.value = false
     return
   }
@@ -614,12 +945,16 @@ async function runTransition(swap: () => void | Promise<void>): Promise<void> {
   } finally {
     transitionBoost.value = 0
     transitionRunning.value = false
-    if (pixelate.value) {
+    if (pixelEffectsActive()) {
       schedulePixelRender()
     } else {
       pixelReady.value = false
     }
   }
+}
+
+function onCommentCreated() {
+  commentsCount.value++
 }
 
 defineExpose({ runTransition })
@@ -633,6 +968,8 @@ watch(
     pixelate,
     pixelStrength,
     pixelColors,
+    edgePixelate,
+    edgePixelStrength,
     transitionEnabled,
     transitionDuration,
     transitionPixels
@@ -644,7 +981,7 @@ watch(
         saveState.value = 'idle'
       }
     }
-    if (pixelate.value || transitionBoost.value > 0.001) {
+    if (pixelEffectsActive()) {
       schedulePixelRender()
     } else {
       pixelReady.value = false
@@ -653,20 +990,30 @@ watch(
 )
 
 watch(
-  () => [props.card.id, props.full ? props.card.width : props.width],
+  () => [props.card.id, props.full ? props.card.width : props.width, props.shareToken],
   () => {
     void loadImage()
   },
   { immediate: true }
 )
 
+watch(
+  () => props.card.id,
+  () => {
+    commentsCount.value = props.card.comments
+    commentsOpen.value = false
+    shareOpen.value = false
+  }
+)
+
 onMounted(() => {
+  auth.update()
   applySettings(settingsStore.settings)
-  if (pixelate.value) {
+  if (pixelEffectsActive()) {
     schedulePixelRender()
   }
   void loadSettings().then(() => {
-    if (pixelate.value) {
+    if (pixelEffectsActive()) {
       schedulePixelRender()
     }
   })
@@ -681,6 +1028,7 @@ onBeforeUnmount(() => {
   }
   sourceVersion++
   imageVersion++
+  edgeSampleCanvas = null
   releaseObjectUrl()
 })
 </script>
@@ -854,6 +1202,10 @@ onBeforeUnmount(() => {
   overscroll-behavior: contain;
 }
 
+.fx-controls--with-edit {
+  top: calc(0.75rem + 2 * 64px + 2 * 0.45rem);
+}
+
 .fx-save {
   min-height: 34px;
   padding: 0.4rem 0.75rem;
@@ -975,11 +1327,17 @@ onBeforeUnmount(() => {
   color: var(--text-secondary);
 }
 
-.views {
+.frame-actions {
   position: absolute;
   right: 0.75rem;
   bottom: 0.75rem;
   z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.views {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
@@ -991,20 +1349,13 @@ onBeforeUnmount(() => {
   text-shadow: 0 1px 4px var(--accent-dark);
 }
 
-.views--with-like {
-  right: calc(0.75rem + 64px + 0.5rem);
-}
-
 .views svg {
   width: 20px;
   height: 20px;
 }
 
-.like-btn {
-  position: absolute;
-  right: 0.75rem;
-  bottom: 0.75rem;
-  z-index: 3;
+.action-btn {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1020,28 +1371,41 @@ onBeforeUnmount(() => {
   transition: background-color 0.2s, color 0.2s;
 }
 
-.like-btn:hover:not(:disabled) {
+.action-btn:hover:not(:disabled) {
   background: var(--text-primary);
   color: var(--accent-dark);
 }
 
-.like-btn.active {
+.action-btn.active {
   color: var(--text-primary);
   border-color: var(--text-secondary);
 }
 
-.like-btn.active svg {
-  color: var(--text-primary);
-}
-
-.like-btn:disabled {
+.action-btn:disabled {
   opacity: 0.6;
   cursor: default;
 }
 
-.like-btn svg {
+.action-btn svg {
   width: 34px;
   height: 34px;
+}
+
+.action-badge {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  min-width: 22px;
+  padding: 0 5px;
+  border: 1px solid var(--overlay-divider);
+  border-radius: 999px;
+  background: var(--text-primary);
+  color: var(--accent-dark);
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  pointer-events: none;
 }
 
 .frame--full .caption {
@@ -1055,18 +1419,9 @@ onBeforeUnmount(() => {
     bottom: 2rem;
   }
 
-  .frame--full .like-btn {
+  .frame--full .frame-actions {
     right: 2.5rem;
     bottom: 2rem;
-  }
-
-  .frame--full .views {
-    right: 2.5rem;
-    bottom: 2rem;
-  }
-
-  .frame--full .views--with-like {
-    right: calc(2.5rem + 64px + 0.5rem);
   }
 
   .fx-dock {
@@ -1078,19 +1433,54 @@ onBeforeUnmount(() => {
     top: calc(1.25rem + 64px + 0.45rem);
     right: 2rem;
   }
+
+  .fx-controls--with-edit {
+    top: calc(1.25rem + 2 * 64px + 2 * 0.45rem);
+  }
 }
 
 @media (max-width: 700px) {
   .frame--full .caption {
-    max-width: calc(100% - 6rem);
+    max-width: calc(100% - 13rem);
+  }
+
+  .frame-actions {
+    gap: 0.4rem;
+  }
+
+  .action-btn {
+    width: 48px;
+    height: 48px;
+  }
+
+  .action-btn svg {
+    width: 26px;
+    height: 26px;
+  }
+
+  .action-badge {
+    min-width: 18px;
+    font-size: 0.6rem;
+    line-height: 15px;
+  }
+
+  .views {
+    font-size: 0.8rem;
+  }
+
+  .views svg {
+    width: 17px;
+    height: 17px;
   }
 }
 
 .views--top-right,
 .frame--full .views--top-right {
+  position: absolute;
   top: 0.75rem;
   right: 0.75rem;
   bottom: auto;
+  z-index: 3;
   gap: 0.4rem;
   font-size: clamp(1.2rem, 2.2vw, 1.8rem);
   opacity: 0.5;
@@ -1101,10 +1491,18 @@ onBeforeUnmount(() => {
   height: clamp(24px, 3vw, 32px);
 }
 
+.frame--admin .views--top-right {
+  right: calc(0.75rem + 64px + 0.5rem);
+}
+
 @media (min-width: 900px) {
   .frame--full .views--top-right {
     top: 1.25rem;
     right: 2rem;
+  }
+
+  .frame--admin.frame--full .views--top-right {
+    right: calc(2rem + 64px + 0.5rem);
   }
 }
 </style>

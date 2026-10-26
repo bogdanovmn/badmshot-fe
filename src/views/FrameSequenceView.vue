@@ -60,8 +60,10 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
+  getCommentedScreenshots,
   getErrorMessage,
   getLikedScreenshots,
+  getMyCommentedScreenshots,
   getTopScreenshots,
   likeScreenshot,
   registerScreenshotView,
@@ -71,7 +73,7 @@ import type { ScreenshotCard } from '@/api'
 import ErrorNotice from '@/components/ErrorNotice.vue'
 import ScreenshotFrame from '@/components/ScreenshotFrame.vue'
 
-type SequenceKind = 'top' | 'liked'
+type SequenceKind = 'top' | 'liked' | 'comments' | 'profile-comments'
 
 interface SequenceConfig {
   loader: () => Promise<ScreenshotCard[]>
@@ -107,6 +109,28 @@ const CONFIGS: Record<SequenceKind, SequenceConfig> = {
     loadError: 'Не удалось загрузить любимые кадры',
     notFound: 'Этот кадр больше не в любимых.',
     empty: 'В любимых пока нет кадров.'
+  },
+  comments: {
+    loader: getCommentedScreenshots,
+    routeName: 'comments-frame',
+    badgeText: 'Свежий комментарий',
+    badgeTitle: 'Вернуться к последним комментариям',
+    badgeTo: '/comments',
+    backText: 'К последним комментариям',
+    loadError: 'Не удалось загрузить последние комментарии',
+    notFound: 'У этого кадра больше нет свежих комментариев.',
+    empty: 'Комментариев пока нет.'
+  },
+  'profile-comments': {
+    loader: getMyCommentedScreenshots,
+    routeName: 'profile-comment-frame',
+    badgeText: 'Мой комментарий',
+    badgeTitle: 'Вернуться к моим комментариям',
+    badgeTo: '/profile?tab=comments',
+    backText: 'К моим комментариям',
+    loadError: 'Не удалось загрузить мои комментарии',
+    notFound: 'Вы больше не комментировали этот кадр.',
+    empty: 'Вы пока не оставляли комментариев.'
   }
 }
 
@@ -121,7 +145,13 @@ const liking = ref(false)
 const transitioning = ref(false)
 const error = ref<string | null>(null)
 
-const kind = computed<SequenceKind>(() => route.meta.sequence === 'liked' ? 'liked' : 'top')
+const kind = computed<SequenceKind>(() => {
+  const sequence = route.meta.sequence
+  if (sequence === 'liked' || sequence === 'comments' || sequence === 'profile-comments') {
+    return sequence
+  }
+  return 'top'
+})
 const config = computed(() => CONFIGS[kind.value])
 const card = computed<ScreenshotCard | null>(() => cards.value[index.value] ?? null)
 const canPrev = computed(() => index.value > 0)

@@ -13,6 +13,8 @@ export interface FrameEffectSettings {
   pixelate: boolean
   pixelStrength: number
   pixelColors: number
+  edgePixelate: boolean
+  edgePixelStrength: number
   transitionEnabled: boolean
   transitionDuration: number
   transitionPixels: number
@@ -57,8 +59,55 @@ export interface ScreenshotCard {
   tournament: boolean
   players: string[]
   likes: number
+  shares: number
+  comments: number
+  lastCommentAt: string | null
   liked: boolean
   views: number
+}
+
+export interface ScreenshotComment {
+  id: string
+  screenshotId: string
+  author: string
+  text: string
+  createdAt: string
+}
+
+export interface SharedFrame {
+  token: string
+  views: number
+  createdAt: string
+  card: ScreenshotCard
+}
+
+export interface PublicSharedFrame {
+  token: string
+  screenshotId: string
+  timecodeSeconds: number
+  imageFormat: string
+  width: number
+  height: number
+  createdAt: string
+  year: number | null
+  month: number | null
+  matchDate: string | null
+  clubName: string | null
+  tournament: boolean
+  players: string[]
+  likes: number
+  shares: number
+  comments: number
+  liked: boolean
+  views: number
+  shareViews: number
+}
+
+export interface UserFrameFilter {
+  playerIds: string[]
+  clubIds: string[]
+  includeIndi: boolean
+  updatedAt: string | null
 }
 
 export type ArchiveType = 'GAMES' | 'INDI'
@@ -67,6 +116,13 @@ export interface ScreenshotFilter {
   players?: string[]
   clubs?: string[]
   indi?: boolean
+}
+
+export interface FrameRateLimitStatus {
+  minSecondsBetweenFrames: number
+  freeFrames: number
+  freeFramesLeft: number
+  retryAfterSeconds: number
 }
 
 export interface CatalogTag {
@@ -82,6 +138,7 @@ export interface Screenshot {
   imageFormat: string
   width: number
   height: number
+  sizeBytes: number
   createdAt: string
 }
 
@@ -95,6 +152,8 @@ export interface MatchBrief {
   clubId: string | null
   clubName: string | null
   tournament: boolean
+  group: string | null
+  comment: string | null
   durationSeconds: number | null
   sizeMbytes: number
   validationError: string | null
@@ -113,6 +172,8 @@ export interface Match {
   clubId: string | null
   clubName: string | null
   tournament: boolean
+  group: string | null
+  comment: string | null
   durationSeconds: number | null
   sizeMbytes: number
   validationError: string | null
@@ -131,16 +192,36 @@ export interface MatchDetail {
   screenshots: Screenshot[]
 }
 
+export interface PlayerRenameMatch {
+  id: string
+  relPath: string
+  club: string | null
+  players: string[]
+  selectedPositions: number[]
+}
+
+export interface PlayerRenameInfo {
+  player: Player
+  matches: PlayerRenameMatch[]
+}
+
+export interface PlayerRenameResult {
+  name: string
+  renamedFiles: number
+}
+
 export interface ArchiveMonth {
   month: number
   matches: number
   invalid: number
+  matched: number
 }
 
 export interface ArchiveYear {
   year: number
   matches: number
   invalid: number
+  matched: number
   months: ArchiveMonth[]
 }
 
@@ -148,10 +229,12 @@ export interface ArchiveSessionFile {
   id: string
   relPath: string
   players: string[]
+  playerIds: string[]
   sizeMbytes: number
   durationSeconds: number | null
   screenshots: number
   validationError: string | null
+  comment: string | null
 }
 
 export interface ArchiveSession {
@@ -165,10 +248,12 @@ export interface ArchiveSession {
   club: string | null
   clubName: string | null
   tournament: boolean
+  group: string | null
   matches: number
   sizeMbytes: number
   durationSeconds: number
   invalid: number
+  comment: string | null
   exportable: boolean
   files: ArchiveSessionFile[]
 }
@@ -306,8 +391,16 @@ export async function getRandomScreenshot(): Promise<ScreenshotCard> {
   return authApi.get<ScreenshotCard>('/screenshots/random')
 }
 
+export async function getScreenshotCard(id: string): Promise<ScreenshotCard> {
+  return authApi.get<ScreenshotCard>(`/screenshots/${id}`)
+}
+
 export async function getNextScreenshot(filter: ScreenshotFilter = {}): Promise<ScreenshotCard> {
   return authApi.get<ScreenshotCard>(appendQuery('/screenshots/next', filter))
+}
+
+export async function getFrameRateLimit(): Promise<FrameRateLimitStatus> {
+  return authApi.get<FrameRateLimitStatus>('/screenshots/rate-limit')
 }
 
 export async function registerScreenshotView(id: string): Promise<void> {
@@ -336,6 +429,52 @@ export async function getTopScreenshots(): Promise<ScreenshotCard[]> {
 
 export async function getLikedScreenshots(): Promise<ScreenshotCard[]> {
   return authApi.get<ScreenshotCard[]>('/screenshots/liked')
+}
+
+export async function getCommentedScreenshots(): Promise<ScreenshotCard[]> {
+  return authApi.get<ScreenshotCard[]>('/screenshots/commented')
+}
+
+export async function getMyCommentedScreenshots(): Promise<ScreenshotCard[]> {
+  return authApi.get<ScreenshotCard[]>('/screenshots/mine/comments')
+}
+
+export async function getMyShares(): Promise<SharedFrame[]> {
+  return authApi.get<SharedFrame[]>('/screenshots/mine/shares')
+}
+
+export async function createScreenshotShare(id: string): Promise<{ token: string }> {
+  return authApi.post<{ token: string }>(`/screenshots/${id}/share`)
+}
+
+export async function getScreenshotComments(id: string): Promise<ScreenshotComment[]> {
+  return authApi.get<ScreenshotComment[]>(`/screenshots/${id}/comments`)
+}
+
+export async function addScreenshotComment(id: string, text: string): Promise<ScreenshotComment> {
+  return authApi.post<ScreenshotComment>(`/screenshots/${id}/comments`, { text })
+}
+
+export async function getPublicSharedFrame(token: string): Promise<PublicSharedFrame> {
+  return makeApiRequest<PublicSharedFrame>('get', `/shares/${token}`)
+}
+
+export async function registerSharedFrameView(token: string): Promise<void> {
+  await makeApiRequest('post', `/shares/${token}/view`)
+}
+
+export function sharedScreenshotUrl(token: string, width: number): string {
+  return `${apiBaseUrl}/shares/${token}/crop/${width}`
+}
+
+export async function getDefaultFrameFilter(): Promise<UserFrameFilter> {
+  return authApi.get<UserFrameFilter>('/profile/filters')
+}
+
+export async function saveDefaultFrameFilter(
+  filter: Pick<UserFrameFilter, 'playerIds' | 'clubIds' | 'includeIndi'>
+): Promise<UserFrameFilter> {
+  return authApi.put<UserFrameFilter>('/profile/filters', filter)
 }
 
 export async function likeScreenshot(id: string): Promise<void> {
@@ -375,18 +514,32 @@ export async function getPlayers(params: { clubId?: string; term?: string } = {}
   return makeApiRequest<Player[]>('get', '/filters/players', params)
 }
 
+export async function getPlayerLetters(): Promise<string[]> {
+  return makeApiRequest<string[]>('get', '/filters/players/letters')
+}
+
+export async function getPlayersByLetter(letter: string): Promise<Player[]> {
+  return makeApiRequest<Player[]>('get', '/filters/players', { letter })
+}
+
 export async function getPlayersByIds(ids: string[]): Promise<Player[]> {
   if (ids.length === 0) {
     return []
   }
-  return makeApiRequest<Player[]>('get', '/filters/players/by-ids', { ids })
+  return makeApiRequest<Player[]>('get', appendValues('/filters/players/by-ids', 'ids', ids))
 }
 
 export async function getClubsByIds(ids: string[]): Promise<Club[]> {
   if (ids.length === 0) {
     return []
   }
-  return makeApiRequest<Club[]>('get', '/filters/clubs/by-ids', { ids })
+  return makeApiRequest<Club[]>('get', appendValues('/filters/clubs/by-ids', 'ids', ids))
+}
+
+function appendValues(url: string, key: string, values: string[]): string {
+  const search = new URLSearchParams()
+  values.forEach(value => search.append(key, value))
+  return `${url}?${search.toString()}`
 }
 
 export async function getPlayerTags(type: ArchiveType = 'GAMES'): Promise<CatalogTag[]> {
@@ -412,8 +565,11 @@ export async function updateClub(id: string, displayName: string | null): Promis
   await authApi.put(`/clubs/${id}`, { displayName })
 }
 
-export async function getArchiveTree(type: ArchiveType = 'GAMES'): Promise<ArchiveYear[]> {
-  return authApi.get<ArchiveYear[]>('/archive/tree', { type })
+export async function getArchiveTree(
+  type: ArchiveType = 'GAMES',
+  playerId?: string
+): Promise<ArchiveYear[]> {
+  return authApi.get<ArchiveYear[]>('/archive/tree', { type, playerId })
 }
 
 export async function getArchiveCapabilities(): Promise<ArchiveCapabilities> {
@@ -465,6 +621,22 @@ export async function getMatch(id: string): Promise<MatchDetail> {
 
 export async function renameMatch(id: string, players: string[]): Promise<MatchBrief> {
   return authApi.post<MatchBrief>(`/archive/matches/${id}/rename`, { players })
+}
+
+export async function deleteMatchMetadata(id: string): Promise<void> {
+  await authApi.delete(`/archive/matches/${id}`)
+}
+
+export async function deleteMatchScreenshot(matchId: string, screenshotId: string): Promise<void> {
+  await authApi.delete(`/archive/matches/${matchId}/screenshots/${screenshotId}`)
+}
+
+export async function getPlayerRenameInfo(id: string): Promise<PlayerRenameInfo> {
+  return authApi.get<PlayerRenameInfo>(`/players/${id}/rename-info`)
+}
+
+export async function renamePlayerEverywhere(id: string, name: string): Promise<PlayerRenameResult> {
+  return authApi.post<PlayerRenameResult>(`/players/${id}/rename`, { name })
 }
 
 export async function getArchiveStats(type: ArchiveType = 'GAMES'): Promise<ArchiveStats> {

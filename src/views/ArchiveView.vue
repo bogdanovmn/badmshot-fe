@@ -40,9 +40,13 @@
         <div class="months">
           <button
             class="month"
-            :class="{ active: isSelected(year.year, month.month) }"
+            :class="{
+              active: isSelected(year.year, month.month),
+              matched: playerId && month.matched > 0
+            }"
             v-for="month in year.months"
             :key="month.month"
+            :title="monthTitle(month)"
             @click="selectMonth(year.year, month.month)"
           >
             <span class="month-name">{{ formatMonthRu(month.month) }}</span>
@@ -91,7 +95,7 @@
             <span class="session-main">
               <span class="session-date">{{ sessionDateLabel(session) }}</span>
               <span class="session-club">{{ sessionTitle(session) }}</span>
-              <span v-if="session.tournament" class="session-tournament">турнир</span>
+              <span v-if="session.tournament" class="session-tournament">{{ session.group ? `турнир · ${session.group}` : 'турнир' }}</span>
             </span>
             <span class="session-meta">
               <span>{{ session.matches }} {{ unitLabel }}</span>
@@ -119,7 +123,19 @@
               :to="`/archive/matches/${file.id}`"
             >
               <span class="file-main">
-                <span class="file-players">{{ file.players.join(' / ') || 'Без игроков' }}</span>
+                <span class="file-players">
+                  <template v-if="file.players.length">
+                    <template v-for="(playerName, index) in file.players" :key="index">
+                      <span
+                        class="file-player"
+                        :class="{ 'file-player--selected': isFilteredPlayer(file, index) }"
+                      >{{ playerName }}</span>
+                      <span v-if="index < file.players.length - 1"> / </span>
+                    </template>
+                  </template>
+                  <template v-else>Без игроков</template>
+                </span>
+                <span v-if="file.comment" class="file-comment">{{ file.comment }}</span>
                 <span v-if="file.validationError" class="file-error">{{ file.validationError }}</span>
               </span>
               <span class="file-meta">
@@ -148,7 +164,9 @@ import {
 } from '@/api'
 import type {
   ArchiveCapabilities,
+  ArchiveMonth,
   ArchiveSession,
+  ArchiveSessionFile,
   ArchiveType,
   ArchiveYear,
   Club
@@ -199,6 +217,13 @@ function isSelected(year: number, month: number): boolean {
   return selectedYear.value === year && selectedMonth.value === month
 }
 
+function monthTitle(month: ArchiveMonth): string {
+  if (!playerId.value) {
+    return `${formatMonthRu(month.month)}: ${month.matches}`
+  }
+  return `${formatMonthRu(month.month)}: ${month.matches}, с игроком — ${month.matched}`
+}
+
 function parseType(value: unknown): ArchiveType {
   return value === 'INDI' ? 'INDI' : 'GAMES'
 }
@@ -243,7 +268,7 @@ async function loadTree() {
   treeLoading.value = true
   treeError.value = null
   try {
-    tree.value = await getArchiveTree(type)
+    tree.value = await getArchiveTree(type, playerId.value ?? undefined)
     treeType.value = type
   } catch (e) {
     treeError.value = getErrorMessage(e, 'Не удалось загрузить дерево архива')
@@ -312,6 +337,10 @@ function sessionTitle(session: ArchiveSession): string {
   return session.clubName || session.club || '—'
 }
 
+function isFilteredPlayer(file: ArchiveSessionFile, index: number): boolean {
+  return playerId.value !== null && file.playerIds[index] === playerId.value
+}
+
 function exportTitle(session: ArchiveSession): string {
   if (!session.exportable) {
     return 'Экспорт недоступен: есть невалидные матчи или нет кадров'
@@ -346,6 +375,10 @@ async function applyRouteQuery() {
   const typeChanged = type !== archiveType.value
   archiveType.value = type
 
+  const queryPlayerId = typeof query.playerId === 'string' ? query.playerId : null
+  const playerChanged = queryPlayerId !== playerId.value
+  playerId.value = queryPlayerId
+
   if (typeChanged || treeType.value !== type) {
     await loadTree()
     if (type === 'GAMES') {
@@ -354,23 +387,27 @@ async function applyRouteQuery() {
       clubs.value = []
       club.value = null
     }
+  } else if (playerChanged) {
+    await loadTree()
   }
 
   const year = query.year ? Number(query.year) : null
   const month = query.month ? Number(query.month) : null
-  const queryPlayerId = typeof query.playerId === 'string' ? query.playerId : null
   const changed = typeChanged
+    || playerChanged
     || year !== selectedYear.value
     || month !== selectedMonth.value
-    || queryPlayerId !== playerId.value
   selectedYear.value = year
   selectedMonth.value = month
-  playerId.value = queryPlayerId
 
   if (!year && !month) {
-    const latestYear = tree.value[0]
-    const latestMonth = latestYear?.months[0]
-    if (latestMonth) {
+    const latestYear = playerId.value
+      ? tree.value.find(item => item.matched > 0)
+      : tree.value[0]
+    const latestMonth = playerId.value
+      ? latestYear?.months.find(item => item.matched > 0)
+      : latestYear?.months[0]
+    if (latestYear && latestMonth) {
       await router.replace({
         query: queryFor(latestYear.year, latestMonth.month, queryPlayerId, type)
       })
@@ -524,6 +561,12 @@ h1 {
 
 .month:hover {
   border-color: var(--color-primary);
+}
+
+.month.matched {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
 }
 
 .month.active {
@@ -711,9 +754,24 @@ h2 {
   overflow-wrap: anywhere;
 }
 
+.file-player--selected {
+  padding: 0.05rem 0.25rem;
+  border-radius: 4px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
+}
+
 .file-error {
   color: var(--color-danger);
   font-size: 0.8rem;
+}
+
+.file-comment {
+  color: var(--color-muted);
+  font-size: 0.8rem;
+  font-style: italic;
+  overflow-wrap: anywhere;
 }
 
 .file-meta {

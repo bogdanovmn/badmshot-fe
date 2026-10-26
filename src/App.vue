@@ -42,8 +42,8 @@
               <NavIcon :name="item.icon" />
             </router-link>
           </div>
-          <router-link v-if="auth.userName" to="/liked" class="user-name full" :title="auth.userName">{{ auth.userName }}</router-link>
-          <router-link v-if="auth.userName" to="/liked" class="user-name short" :title="auth.userName">{{ initials(auth.userName) }}</router-link>
+          <router-link v-if="auth.userName" to="/profile" class="user-name full" title="Профиль">{{ auth.userName }}</router-link>
+          <router-link v-if="auth.userName" to="/profile" class="user-name short" title="Профиль">{{ initials(auth.userName) }}</router-link>
           <button class="icon-btn" title="Выйти" aria-label="Выйти" @click="handleLogout">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
@@ -85,7 +85,7 @@ import { getBackendVersion } from '@/api'
 import { SsoService } from '@bogdanovmn/ssofw'
 import NavIcon from '@/components/NavIcon.vue'
 
-type NavIconName = 'top' | 'stats' | 'explore' | 'liked' | 'archive'
+type NavIconName = 'top' | 'stats' | 'explore' | 'liked' | 'archive' | 'comments'
 
 interface NavItem {
   to: string
@@ -107,6 +107,7 @@ const navRef = ref<HTMLElement | null>(null)
 const navItems = computed<NavItem[]>(() => {
   const items: NavItem[] = [
     { to: '/top', label: 'ТОП', icon: 'top' },
+    { to: '/comments', label: 'Последние комментарии', icon: 'comments' },
     { to: '/stats', label: 'Статистика', icon: 'stats' },
     { to: '/explore', label: 'Кадры', icon: 'explore' },
     { to: '/liked', label: 'Любимые', icon: 'liked' },
@@ -204,7 +205,7 @@ async function handleLogout() {
   flex: 0 0 auto;
   justify-content: space-between;
   align-items: center;
-  padding: 0.75rem 1rem;
+  padding: 0.35rem 1rem;
   background: var(--color-nav);
   color: var(--text-primary);
   flex-wrap: wrap;
@@ -427,10 +428,10 @@ async function handleLogout() {
 
 @media (min-width: 768px) {
   .navbar {
-    padding: 1rem 2rem;
+    padding: 0.35rem 2rem;
   }
 
-  .content {
+  .content:not(.content--immersive) {
     margin: 2rem auto;
     padding: 0 2rem;
   }

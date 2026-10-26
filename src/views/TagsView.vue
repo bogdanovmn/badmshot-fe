@@ -153,10 +153,13 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
 }
 
 .heading {
-  max-width: 760px;
+  max-width: none;
 }
 
 .heading h1 {

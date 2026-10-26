@@ -2,7 +2,7 @@
   <div class="page">
     <header class="page-head">
       <h1>ТОП кадров</h1>
-      <p class="subtitle">Сначала по лайкам, затем по просмотрам</p>
+      <p class="subtitle">Сначала по лайкам, затем по шарингам, комментариям и просмотрам</p>
     </header>
 
     <ErrorNotice v-if="error" :message="error" />
@@ -58,6 +58,9 @@ onMounted(load)
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
 }
 
 .page-head {

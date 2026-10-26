@@ -123,7 +123,18 @@
               :to="`/archive/matches/${file.id}`"
             >
               <span class="file-main">
-                <span class="file-players">{{ file.players.join(' / ') || 'Без игроков' }}</span>
+                <span class="file-players">
+                  <template v-if="file.players.length">
+                    <template v-for="(playerName, index) in file.players" :key="index">
+                      <span
+                        class="file-player"
+                        :class="{ 'file-player--selected': isFilteredPlayer(file, index) }"
+                      >{{ playerName }}</span>
+                      <span v-if="index < file.players.length - 1"> / </span>
+                    </template>
+                  </template>
+                  <template v-else>Без игроков</template>
+                </span>
                 <span v-if="file.comment" class="file-comment">{{ file.comment }}</span>
                 <span v-if="file.validationError" class="file-error">{{ file.validationError }}</span>
               </span>
@@ -155,6 +166,7 @@ import type {
   ArchiveCapabilities,
   ArchiveMonth,
   ArchiveSession,
+  ArchiveSessionFile,
   ArchiveType,
   ArchiveYear,
   Club
@@ -323,6 +335,10 @@ function sessionTitle(session: ArchiveSession): string {
     return 'Индивидуальные тренировки'
   }
   return session.clubName || session.club || '—'
+}
+
+function isFilteredPlayer(file: ArchiveSessionFile, index: number): boolean {
+  return playerId.value !== null && file.playerIds[index] === playerId.value
 }
 
 function exportTitle(session: ArchiveSession): string {
@@ -736,6 +752,14 @@ h2 {
 .file-players {
   font-weight: 600;
   overflow-wrap: anywhere;
+}
+
+.file-player--selected {
+  padding: 0.05rem 0.25rem;
+  border-radius: 4px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
 }
 
 .file-error {

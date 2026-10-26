@@ -63,6 +63,9 @@
                     </div>
                 </div>
                 <div class="row-actions">
+                    <button class="btn-secondary" type="button" @click="openRename(player)">
+                        Массовое переименование
+                    </button>
                     <button class="btn-primary" :disabled="savingId === player.id || !isDirty(player)"
                         @click="save(player)">
                         {{ savingId === player.id ? '...' : 'Сохранить' }}
@@ -71,14 +74,20 @@
                 </div>
             </div>
         </div>
+
+        <div v-if="renameNotice" class="notice">{{ renameNotice }}</div>
+
+        <PlayerRenameDialog v-if="renameTarget" :player="renameTarget" @close="renameTarget = null"
+            @renamed="onRenamed" />
     </div>
 </template>
 
 <script setup lang="ts">
     import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
     import { getErrorMessage, getPlayerLetters, getPlayers, getPlayersByLetter, updatePlayer } from '@/api'
-    import type { Player, PlayerAlias } from '@/api'
+    import type { Player, PlayerAlias, PlayerRenameResult } from '@/api'
     import ErrorNotice from '@/components/ErrorNotice.vue'
+    import PlayerRenameDialog from '@/components/PlayerRenameDialog.vue'
 
     defineProps < { embedded?: boolean } > ()
 
@@ -95,6 +104,8 @@
     const error = ref < string | null > (null)
     const savingId = ref < string | null > (null)
     const savedId = ref < string | null > (null)
+    const renameTarget = ref < Player | null > (null)
+    const renameNotice = ref < string | null > (null)
 
     const aliasTargetId = ref < string | null > (null)
     const aliasTerms = reactive < Record < string, string >> ({})
@@ -179,6 +190,17 @@
         if (edit) {
             edit.alias = null
         }
+    }
+
+    function openRename(player: Player) {
+        renameNotice.value = null
+        renameTarget.value = player
+    }
+
+    async function onRenamed(result: PlayerRenameResult) {
+        renameTarget.value = null
+        renameNotice.value = `Игрок переименован в «${result.name}» (файлов: ${result.renamedFiles}).`
+        await load()
     }
 
     async function searchAliases() {
@@ -491,17 +513,22 @@
         display: flex;
         align-items: center;
         gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .btn-primary,
+    .btn-secondary {
+        min-height: 40px;
+        padding: 0.5rem 1.1rem;
+        border-radius: 6px;
+        font-weight: 600;
+        cursor: pointer;
     }
 
     .btn-primary {
-        min-height: 40px;
-        padding: 0.5rem 1.1rem;
         border: 1px solid var(--btn-primary-bg);
-        border-radius: 6px;
         background: var(--btn-primary-bg);
         color: var(--btn-primary-text);
-        font-weight: 600;
-        cursor: pointer;
     }
 
     .btn-primary:hover:not(:disabled) {
@@ -510,9 +537,31 @@
         border-color: var(--btn-primary-bg-hover);
     }
 
-    .btn-primary:disabled {
+    .btn-secondary {
+        border: 1px solid var(--btn-ghost-border);
+        background: transparent;
+        color: var(--text-primary);
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+        background: var(--text-primary);
+        color: var(--accent-dark);
+        border-color: var(--text-primary);
+    }
+
+    .btn-primary:disabled,
+    .btn-secondary:disabled {
         opacity: 0.5;
         cursor: default;
+    }
+
+    .notice {
+        padding: 0.6rem 0.8rem;
+        border: 1px solid var(--color-border);
+        border-radius: 8px;
+        background: var(--color-surface);
+        color: var(--color-success);
+        font-size: 0.85rem;
     }
 
     .success {

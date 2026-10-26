@@ -138,6 +138,7 @@ export interface Screenshot {
   imageFormat: string
   width: number
   height: number
+  sizeBytes: number
   createdAt: string
 }
 
@@ -191,6 +192,24 @@ export interface MatchDetail {
   screenshots: Screenshot[]
 }
 
+export interface PlayerRenameMatch {
+  id: string
+  relPath: string
+  club: string | null
+  players: string[]
+  selectedPositions: number[]
+}
+
+export interface PlayerRenameInfo {
+  player: Player
+  matches: PlayerRenameMatch[]
+}
+
+export interface PlayerRenameResult {
+  name: string
+  renamedFiles: number
+}
+
 export interface ArchiveMonth {
   month: number
   matches: number
@@ -210,6 +229,7 @@ export interface ArchiveSessionFile {
   id: string
   relPath: string
   players: string[]
+  playerIds: string[]
   sizeMbytes: number
   durationSeconds: number | null
   screenshots: number
@@ -601,6 +621,22 @@ export async function getMatch(id: string): Promise<MatchDetail> {
 
 export async function renameMatch(id: string, players: string[]): Promise<MatchBrief> {
   return authApi.post<MatchBrief>(`/archive/matches/${id}/rename`, { players })
+}
+
+export async function deleteMatchMetadata(id: string): Promise<void> {
+  await authApi.delete(`/archive/matches/${id}`)
+}
+
+export async function deleteMatchScreenshot(matchId: string, screenshotId: string): Promise<void> {
+  await authApi.delete(`/archive/matches/${matchId}/screenshots/${screenshotId}`)
+}
+
+export async function getPlayerRenameInfo(id: string): Promise<PlayerRenameInfo> {
+  return authApi.get<PlayerRenameInfo>(`/players/${id}/rename-info`)
+}
+
+export async function renamePlayerEverywhere(id: string, name: string): Promise<PlayerRenameResult> {
+  return authApi.post<PlayerRenameResult>(`/players/${id}/rename`, { name })
 }
 
 export async function getArchiveStats(type: ArchiveType = 'GAMES'): Promise<ArchiveStats> {

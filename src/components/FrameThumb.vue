@@ -5,14 +5,14 @@
 
       <div class="bottom-scrim" aria-hidden="true"></div>
 
-      <div class="stats">
-        <span class="stat" :title="`Лайков: ${formatCount(card.likes)}`">
+      <div v-if="hasStats" class="stats">
+        <span v-if="statVisible(card.likes)" class="stat" :title="`Лайков: ${formatCount(card.likes)}`">
           <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
           </svg>
           <span>{{ formatCount(card.likes) }}</span>
         </span>
-        <span class="stat" :title="`Поделились: ${formatCount(card.shares)}`">
+        <span v-if="statVisible(card.shares)" class="stat" :title="`Поделились: ${formatCount(card.shares)}`">
           <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="18" cy="5" r="3" />
             <circle cx="6" cy="12" r="3" />
@@ -22,20 +22,20 @@
           </svg>
           <span>{{ formatCount(card.shares) }}</span>
         </span>
-        <span class="stat" :title="`Комментариев: ${formatCount(card.comments)}`">
+        <span v-if="statVisible(card.comments)" class="stat" :title="`Комментариев: ${formatCount(card.comments)}`">
           <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
           </svg>
           <span>{{ formatCount(card.comments) }}</span>
         </span>
-        <span class="stat" :title="`Просмотров: ${formatCount(card.views)}`">
+        <span v-if="statVisible(card.views)" class="stat" :title="`Просмотров: ${formatCount(card.views)}`">
           <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
             <circle cx="12" cy="12" r="3" />
           </svg>
           <span>{{ formatCount(card.views) }}</span>
         </span>
-        <span v-if="shareViews !== undefined" class="stat" :title="`Просмотров по ссылке: ${formatCount(shareViews)}`">
+        <span v-if="shareViews !== undefined && statVisible(shareViews)" class="stat" :title="`Просмотров по ссылке: ${formatCount(shareViews)}`">
           <svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="18" cy="5" r="3" />
             <circle cx="6" cy="12" r="3" />
@@ -67,12 +67,28 @@ import { formatDateRu } from '@/common'
 import ScreenshotImage from '@/components/ScreenshotImage.vue'
 
 const props = defineProps<{
-  card: ScreenshotCard
+  card: Omit<ScreenshotCard, 'liked'>
   to?: RouteLocationRaw
   shareViews?: number
+  hideEmptyStats?: boolean
 }>()
 
 const linkComponent = computed(() => props.to ? RouterLink : 'div')
+
+const hasStats = computed(() => {
+  if (!props.hideEmptyStats) {
+    return true
+  }
+  return props.card.likes > 0
+    || props.card.shares > 0
+    || props.card.comments > 0
+    || props.card.views > 0
+    || (props.shareViews !== undefined && props.shareViews > 0)
+})
+
+function statVisible(value: number): boolean {
+  return !props.hideEmptyStats || value > 0
+}
 
 const thumbAlt = computed(() => props.card.players.length
   ? `Кадр: ${props.card.players.join(', ')}`

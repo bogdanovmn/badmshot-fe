@@ -20,6 +20,7 @@
         v-for="card in cards"
         :key="card.id"
         :card="card"
+        hide-empty-stats
         :to="{ name: 'top-frame', params: { id: card.id } }"
       />
     </div>
@@ -27,22 +28,23 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { getErrorMessage, getTopScreenshots } from '@/api'
-import type { ScreenshotCard } from '@/api'
+import { computed, onMounted, ref } from 'vue'
+import { getErrorMessage } from '@/api'
 import ErrorNotice from '@/components/ErrorNotice.vue'
 import FrameThumb from '@/components/FrameThumb.vue'
 import TvPlaceholder from '@/components/TvPlaceholder.vue'
+import { topFramesStore } from '@/stores/topFrames'
 
-const cards = ref<ScreenshotCard[]>([])
+const store = topFramesStore()
+const cards = computed(() => store.cards)
 const loading = ref(true)
 const error = ref<string | null>(null)
 
 async function load() {
-  loading.value = true
+  loading.value = cards.value.length === 0
   error.value = null
   try {
-    cards.value = await getTopScreenshots()
+    await store.ensureLoaded()
   } catch (e) {
     error.value = getErrorMessage(e, 'Не удалось загрузить ТОП')
   } finally {

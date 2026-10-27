@@ -64,7 +64,7 @@ import {
   getErrorMessage,
   getLikedScreenshots,
   getMyCommentedScreenshots,
-  getTopScreenshots,
+  getScreenshotCard,
   likeScreenshot,
   registerScreenshotView,
   unlikeScreenshot
@@ -72,6 +72,7 @@ import {
 import type { ScreenshotCard } from '@/api'
 import ErrorNotice from '@/components/ErrorNotice.vue'
 import ScreenshotFrame from '@/components/ScreenshotFrame.vue'
+import { topFramesStore } from '@/stores/topFrames'
 
 type SequenceKind = 'top' | 'liked' | 'comments' | 'profile-comments'
 
@@ -89,7 +90,7 @@ interface SequenceConfig {
 
 const CONFIGS: Record<SequenceKind, SequenceConfig> = {
   top: {
-    loader: getTopScreenshots,
+    loader: loadTopCards,
     routeName: 'top-frame',
     badgeText: 'Кадр из ТОПа',
     badgeTitle: 'Вернуться к ТОПу',
@@ -136,6 +137,7 @@ const CONFIGS: Record<SequenceKind, SequenceConfig> = {
 
 const route = useRoute()
 const router = useRouter()
+const topFrames = topFramesStore()
 
 const frameRef = ref<InstanceType<typeof ScreenshotFrame> | null>(null)
 const cards = ref<ScreenshotCard[]>([])
@@ -144,6 +146,18 @@ const loading = ref(true)
 const liking = ref(false)
 const transitioning = ref(false)
 const error = ref<string | null>(null)
+
+let likeVersion = 0
+let likedRequest = 0
+
+/**
+ * ТОП уже загружен списком на странице /top, повторно его не запрашиваем.
+ * Персональный флаг `liked` в ответе ТОПа отсутствует — его добираем для текущего кадра.
+ */
+function loadTopCards(): Promise<ScreenshotCard[]> {
+  return topFrames.ensureLoaded()
+    .then(items => items.map(item => ({ ...item, liked: false })))
+}
 
 const kind = computed<SequenceKind>(() => {
   const sequence = route.meta.sequence
@@ -224,6 +238,7 @@ async function toggleLike() {
   const current = card.value
   const position = index.value
   const nextLiked = !current.liked
+  likeVersion += 1
   cards.value[position] = {
     ...current,
     liked: nextLiked,
@@ -235,6 +250,8 @@ async function toggleLike() {
     } else {
       await unlikeScreenshot(current.id)
     }
+    // Счётчики в ТОПе изменились — при следующем заходе список перечитаем.
+    topFrames.invalidate()
   } catch (e) {
     cards.value[position] = current
     error.value = getErrorMessage(e, 'Не удалось изменить лайк')
@@ -268,11 +285,42 @@ watch(
 watch(
   () => card.value?.id,
   id => {
-    if (id) {
-      void registerScreenshotView(id)
+    if (!id) {
+      return
+    }
+    void registerScreenshotView(id)
+    if (kind.value === 'top') {
+      void refreshLiked(id)
     }
   }
 )
+
+/**
+ * В ТОПе флаг `liked` не приходит (ответ общий для всех), поэтому для текущего кадра
+ * запрашиваем полную карточку. Гонки с быстрыми переключениями и лайками отсекаем счётчиками.
+ */
+async function refreshLiked(id: string) {
+  const request = ++likedRequest
+  const version = likeVersion
+  const sequence = kind.value
+  try {
+    const fresh = await getScreenshotCard(id)
+    if (request !== likedRequest || version !== likeVersion || sequence !== kind.value) {
+      return
+    }
+    const position = cards.value.findIndex(item => item.id === id)
+    if (position < 0) {
+      return
+    }
+    const current = cards.value[position]
+    if (!current) {
+      return
+    }
+    cards.value[position] = { ...current, liked: fresh.liked }
+  } catch {
+    // Флаг не критичен: без него сердечко просто останется неактивным.
+  }
+}
 
 onMounted(load)
 </script>

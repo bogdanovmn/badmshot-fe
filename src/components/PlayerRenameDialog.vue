@@ -6,7 +6,13 @@
           <div>
             <h2 id="player-rename-title">Массовое переименование</h2>
             <p class="dialog-subtitle">
-              Имя будет изменено во всех файлах и метаинформации выбранного игрока.
+              <template v-if="filesReadOnly">
+                Имя будет изменено только в метаинформации выбранного игрока.
+                Файлы на диске останутся с прежними именами.
+              </template>
+              <template v-else>
+                Имя будет изменено во всех файлах и метаинформации выбранного игрока.
+              </template>
             </p>
           </div>
           <button class="close-btn" type="button" aria-label="Закрыть" @click="close">×</button>
@@ -16,8 +22,14 @@
           <div v-if="loading" class="state">Загрузка матчей...</div>
           <div v-else-if="loadError" class="state state--error">{{ loadError }}</div>
           <template v-else-if="info">
+            <p v-if="filesReadOnly" class="warning">
+              <strong>Файлы архива доступны только для чтения.</strong>
+              Будет изменена только метаинформация игрока. Видеофайлы на диске
+              не переименовываются. Чтобы переименовывать и файлы, отключите
+              <code>BADMSHOT_ARCHIVE_FILES_READ_ONLY</code>.
+            </p>
             <label class="field">
-              <span>Имя игрока в файлах</span>
+              <span>{{ filesReadOnly ? 'Новое имя игрока' : 'Имя игрока в файлах' }}</span>
               <input
                 v-model="name"
                 type="text"
@@ -55,7 +67,15 @@
             </section>
 
             <div v-if="confirming" class="confirm">
-              <p>
+              <p v-if="filesReadOnly">
+                Переименовать «{{ info.player.name }}» в «{{ trimmedName }}»?
+                <strong>Изменения затронут только метаинформацию.</strong>
+                Файлы на диске сохранят прежние имена. Если игрок с таким именем
+                уже существует, записи будут объединены.
+                Найдено матчей с игроком: {{ info.matches.length }}.
+                Отменить это действие нельзя.
+              </p>
+              <p v-else>
                 Переименовать «{{ info.player.name }}» в «{{ trimmedName }}»?
                 Имя будет заменено в файлах на диске и в метаинформации.
                 Если игрок с таким именем уже существует, записи будут объединены.
@@ -74,13 +94,14 @@
               Отмена
             </button>
             <button class="btn-primary" type="button" :disabled="saving" @click="apply">
-              {{ saving ? 'Переименование...' : 'Да, переименовать' }}
+              <template v-if="saving">Сохранение...</template>
+              <template v-else>{{ filesReadOnly ? 'Да, сохранить в метаинформации' : 'Да, переименовать' }}</template>
             </button>
           </template>
           <template v-else>
             <button class="btn-secondary" type="button" @click="close">Закрыть</button>
             <button class="btn-primary" type="button" :disabled="!canSave" @click="askConfirmation">
-              Сохранить везде
+              {{ filesReadOnly ? 'Сохранить в метаинформации' : 'Сохранить везде' }}
             </button>
           </template>
         </footer>
@@ -91,14 +112,20 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { getErrorMessage, getPlayerRenameInfo, renamePlayerEverywhere } from '@/api'
-import type { Player, PlayerRenameInfo, PlayerRenameResult } from '@/api'
+import {
+  getArchiveCapabilities,
+  getErrorMessage,
+  getPlayerRenameInfo,
+  renamePlayerEverywhere
+} from '@/api'
+import type { ArchiveCapabilities, Player, PlayerRenameInfo, PlayerRenameResult } from '@/api'
 import ErrorNotice from '@/components/ErrorNotice.vue'
 
 const props = defineProps<{ player: Player }>()
 const emit = defineEmits<{ close: []; renamed: [result: PlayerRenameResult] }>()
 
 const info = ref<PlayerRenameInfo | null>(null)
+const capabilities = ref<ArchiveCapabilities | null>(null)
 const name = ref('')
 const loading = ref(true)
 const loadError = ref<string | null>(null)
@@ -106,6 +133,7 @@ const error = ref<string | null>(null)
 const saving = ref(false)
 const confirming = ref(false)
 
+const filesReadOnly = computed(() => capabilities.value?.filesReadOnly ?? false)
 const trimmedName = computed(() => name.value.trim())
 
 const validationHint = computed(() => {
@@ -143,6 +171,19 @@ async function load() {
     loadError.value = getErrorMessage(e, 'Не удалось загрузить данные игрока')
   } finally {
     loading.value = false
+  }
+}
+
+async function loadCapabilities() {
+  try {
+    capabilities.value = await getArchiveCapabilities()
+  } catch {
+    capabilities.value = {
+      exportEnabled: false,
+      importEnabled: false,
+      indexEnabled: false,
+      filesReadOnly: true
+    }
   }
 }
 
@@ -190,7 +231,7 @@ function onKeydown(event: KeyboardEvent) {
 onMounted(() => {
   document.addEventListener('keydown', onKeydown)
   document.body.style.overflow = 'hidden'
-  void load()
+  void Promise.all([load(), loadCapabilities()])
 })
 
 onBeforeUnmount(() => {
@@ -318,6 +359,25 @@ onBeforeUnmount(() => {
 
 .hint--warning {
   color: var(--color-danger);
+}
+
+.warning {
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--color-danger);
+  border-radius: 8px;
+  background: var(--color-danger-soft);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.warning strong {
+  color: var(--color-danger);
+}
+
+.warning code {
+  font-family: monospace;
+  font-size: 0.82em;
 }
 
 .matches {

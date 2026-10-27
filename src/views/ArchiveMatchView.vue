@@ -35,8 +35,14 @@
         </div>
       </section>
 
-      <section v-if="capabilities && !capabilities.readOnly" class="rename">
-        <h2>Игроки (переименование файла)</h2>
+      <section v-if="capabilities" class="rename">
+        <h2>{{ filesReadOnly ? 'Игроки (переименование метаинформации)' : 'Игроки (переименование файла)' }}</h2>
+        <p v-if="filesReadOnly" class="warning">
+          <strong>Файлы архива доступны только для чтения.</strong>
+          Имена игроков будут изменены только в метаинформации — файлы на диске останутся
+          с прежними именами. Чтобы переименовывать и файлы, отключите
+          <code>BADMSHOT_ARCHIVE_FILES_READ_ONLY</code>.
+        </p>
         <div class="rename-rows">
           <div v-for="(player, index) in editPlayers" :key="index" class="rename-row">
             <input v-model="editPlayers[index]" class="rename-input" type="text" />
@@ -67,7 +73,9 @@
             {{ saving ? 'Сохранение...' : 'Сохранить' }}
           </button>
           <button class="btn-secondary" :disabled="saving" @click="resetEdit">Сбросить</button>
-          <span v-if="success" class="success">Переименовано</span>
+          <span v-if="success" class="success">
+            {{ filesReadOnly ? 'Метаинформация обновлена' : 'Переименовано' }}
+          </span>
         </div>
       </section>
 
@@ -138,6 +146,7 @@ const deletingMatch = ref(false)
 const deletingShotId = ref<string | null>(null)
 
 const isIndi = computed(() => detail.value?.match.type === 'INDI')
+const filesReadOnly = computed(() => capabilities.value?.filesReadOnly ?? false)
 
 const typeLabel = computed(() => isIndi.value
   ? 'Индивидуальная тренировка'
@@ -196,7 +205,7 @@ async function loadCapabilities() {
       exportEnabled: false,
       importEnabled: false,
       indexEnabled: false,
-      readOnly: true
+      filesReadOnly: true
     }
   }
 }
@@ -424,6 +433,26 @@ h2 {
   margin-top: 0.5rem;
   color: var(--color-muted);
   font-size: 0.85rem;
+}
+
+.warning {
+  margin-bottom: 0.85rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--color-danger);
+  border-radius: 8px;
+  background: var(--color-danger-soft);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.warning strong {
+  color: var(--color-danger);
+}
+
+.warning code {
+  font-family: monospace;
+  font-size: 0.82em;
 }
 
 .rename-input {

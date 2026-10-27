@@ -285,7 +285,7 @@ async function loadCapabilities() {
       exportEnabled: false,
       importEnabled: false,
       indexEnabled: false,
-      readOnly: true
+      filesReadOnly: true
     }
   }
 }

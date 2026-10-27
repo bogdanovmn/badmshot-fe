@@ -213,6 +213,7 @@ export interface PlayerRenameInfo {
 export interface PlayerRenameResult {
   name: string
   renamedFiles: number
+  filesReadOnly: boolean
 }
 
 export interface ArchiveMonth {
@@ -273,7 +274,7 @@ export interface ArchiveCapabilities {
   exportEnabled: boolean
   importEnabled: boolean
   indexEnabled: boolean
-  readOnly: boolean
+  filesReadOnly: boolean
 }
 
 export interface SessionsQuery {
@@ -645,7 +646,7 @@ export async function renamePlayerEverywhere(id: string, name: string): Promise<
 }
 
 export async function getArchiveStats(type: ArchiveType = 'GAMES'): Promise<ArchiveStats> {
-  return authApi.get<ArchiveStats>('/archive/stats', { type })
+  return authApi.get<ArchiveStats>('/stats/archive', { type })
 }
 
 export async function getIndexJob(): Promise<JobResponse | null> {

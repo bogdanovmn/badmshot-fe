@@ -199,7 +199,9 @@
 
     async function onRenamed(result: PlayerRenameResult) {
         renameTarget.value = null
-        renameNotice.value = `Игрок переименован в «${result.name}» (файлов: ${result.renamedFiles}).`
+        renameNotice.value = result.filesReadOnly
+            ? `Игрок переименован в «${result.name}» в метаинформации. Файлы на диске не изменены (BADMSHOT_ARCHIVE_FILES_READ_ONLY).`
+            : `Игрок переименован в «${result.name}» (файлов: ${result.renamedFiles}).`
         await load()
     }
 

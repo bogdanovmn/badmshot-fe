@@ -23,7 +23,7 @@ const router = createRouter({
       component: () => import('@/views/FrameSequenceView.vue'),
       meta: { private: true, immersive: true, sequence: 'comments' }
     },
-    { path: '/stats', alias: '/tags', component: () => import('@/views/TagsView.vue'), meta: { private: true } },
+    { path: '/stats', alias: '/tags', component: () => import('@/views/StatsView.vue'), meta: { private: true } },
     { path: '/explore', component: () => import('@/views/ExploreView.vue'), meta: { private: true, immersive: true } },
     { path: '/liked', component: () => import('@/views/LikedView.vue'), meta: { private: true } },
     {

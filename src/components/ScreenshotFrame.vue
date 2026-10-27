@@ -1,9 +1,10 @@
 <template>
   <figure
+    ref="figureEl"
     class="frame"
     :class="{ 'frame--full': full, 'frame--admin': auth.isAdmin, 'frame--compact': compact }"
   >
-    <div v-if="$slots.topbar" class="frame-topbar">
+    <div v-if="$slots.topbar" ref="topbarEl" class="frame-topbar" :style="topbarStyle">
       <slot name="topbar"></slot>
     </div>
     <div
@@ -11,7 +12,7 @@
       class="image-wrap"
       :class="{ 'effect-halftone': halftone, 'effect-blur': blur }"
     >
-      <div class="frame-box" :style="[aspectStyle, boxStyle, effectStyle]">
+      <div ref="boxEl" class="frame-box" :style="[aspectStyle, boxStyle, effectStyle]">
         <div v-if="!loaded" class="placeholder">Загрузка кадра...</div>
         <img
           v-if="url"
@@ -438,9 +439,13 @@ const aspectStyle = computed<CSSProperties>(() => ({
 const COMPACT_MEDIA = '(max-width: 1024px) and (orientation: portrait)'
 
 const compact = ref(false)
+const figureEl = ref<HTMLElement | null>(null)
 const stageEl = ref<HTMLElement | null>(null)
 const barEl = ref<HTMLElement | null>(null)
+const boxEl = ref<HTMLElement | null>(null)
+const topbarEl = ref<HTMLElement | null>(null)
 const boxSize = ref<{ width: number; height: number } | null>(null)
+const navShift = ref(0)
 
 const boxStyle = computed<CSSProperties>(() => {
   const size = boxSize.value
@@ -448,6 +453,18 @@ const boxStyle = computed<CSSProperties>(() => {
     return {}
   }
   return { width: `${size.width}px`, height: `${size.height}px` }
+})
+
+/*
+ * Кнопки смены кадра в компактном режиме центрируются по верхней чёрной
+ * полосе (от верха кадра до кадра), а не по своей строке. Сдвиг считается
+ * по фактическим координатам, чтобы не зависеть от высоты панели.
+ */
+const topbarStyle = computed<CSSProperties>(() => {
+  if (!compact.value || !navShift.value) {
+    return {}
+  }
+  return { transform: `translateY(${navShift.value}px)` }
 })
 
 let compactQuery: MediaQueryList | null = null
@@ -482,10 +499,36 @@ function measureBox(): void {
   boxSize.value = next
 }
 
+function updateNavShift(): void {
+  const figure = figureEl.value
+  const topbar = topbarEl.value
+  const box = boxEl.value
+  if (!compact.value || !figure || !topbar || !box) {
+    navShift.value = 0
+    return
+  }
+  const figureTop = figure.getBoundingClientRect().top
+  const bandHeight = box.getBoundingClientRect().top - figureTop
+  // Ориентируемся на саму кнопку навигации (у панели может быть свой padding).
+  const nav = (topbar.firstElementChild as HTMLElement | null) ?? topbar
+  // Текущий центр берём без учёта уже применённого сдвига.
+  const navCenter = nav.getBoundingClientRect().top - figureTop + nav.offsetHeight / 2 - navShift.value
+  const next = Math.max(0, Math.round(bandHeight / 2 - navCenter))
+  if (next !== navShift.value) {
+    navShift.value = next
+  }
+}
+
+function measure(): void {
+  measureBox()
+  void nextTick(updateNavShift)
+}
+
 function applyCompact(matches: boolean): void {
   compact.value = props.full && matches
   if (!compact.value) {
     boxSize.value = null
+    navShift.value = 0
   }
 }
 
@@ -1085,14 +1128,14 @@ watch(
 )
 
 watch(compact, () => {
-  void nextTick(measureBox)
+  measure()
 })
 
 watch(
   () => [props.card.width, props.card.height, props.full],
   () => {
     applyCompact(compactQuery ? compactQuery.matches : compact.value)
-    void nextTick(measureBox)
+    measure()
   }
 )
 
@@ -1111,14 +1154,14 @@ onMounted(() => {
   compactQuery = window.matchMedia(COMPACT_MEDIA)
   applyCompact(compactQuery.matches)
   compactQuery.addEventListener('change', onCompactQueryChange)
-  stageObserver = new ResizeObserver(() => measureBox())
+  stageObserver = new ResizeObserver(() => measure())
   if (stageEl.value) {
     stageObserver.observe(stageEl.value)
   }
   if (barEl.value) {
     stageObserver.observe(barEl.value)
   }
-  void nextTick(measureBox)
+  measure()
 })
 
 onBeforeUnmount(() => {
@@ -1221,9 +1264,20 @@ onBeforeUnmount(() => {
 .frame--full.frame--compact .frame-topbar {
   position: static;
   flex: 0 0 auto;
-  align-items: flex-end;
+  align-items: center;
   padding: 0.5rem 0.75rem 0;
   background: var(--bg-main);
+}
+
+/* Кнопки смены кадра чуть крупнее остальных кнопок кадра. */
+.frame--full.frame--compact :deep(.frame-topbar .slider-btn) {
+  width: calc(var(--frame-btn-size) * 1.18);
+  height: calc(var(--frame-btn-size) * 1.18);
+}
+
+.frame--full.frame--compact :deep(.frame-topbar .slider-btn svg) {
+  width: calc(var(--frame-btn-icon) * 1.18);
+  height: calc(var(--frame-btn-icon) * 1.18);
 }
 
 /* Кадр и строка кнопок вместе центрируются по вертикали. */

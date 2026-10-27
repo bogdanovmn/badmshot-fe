@@ -23,10 +23,10 @@
 
     const emit = defineEmits < { select: [tag: CatalogTag] } > ()
 
-    const MIN_SIZE_REM = 0.6
-    const MAX_SIZE_REM = 4.5
+    const MIN_SIZE_REM = 0.7
+    const MAX_SIZE_REM = 4.0
     /** Количество групп, на которое делится первая (размерная) половина. */
-    const TAG_SIZE_STEPS = 15
+    const TAG_SIZE_STEPS = 3
     /** Всего групп: первая половина меняет размер, вторая — бледность и жирность. */
     const TAG_GROUPS = TAG_SIZE_STEPS * 2
     const GROUP_SPAN = Math.max(1, TAG_SIZE_STEPS - 1)
@@ -34,23 +34,66 @@
     const MAX_FONT_WEIGHT = 700
     const PALE_FONT_WEIGHT_START = 600
     const PALE_FONT_WEIGHT_END = 400
-    const PALE_OPACITY_START = 0.195
+    const PALE_OPACITY_START = 0.85
     const PALE_OPACITY_END = 0.16
 
-    const maxMatches = computed(() => Math.max(1, ...props.tags.map(tag => tag.matches)))
+    /** Вклад абсолютного веса (в лог-шкале) и ранга в итоговый балл тэга. */
+    const MAGNITUDE_SHARE = 0.7
+    const RANK_SHARE = 0.3
 
     /**
-     * Квантование веса в 2*TAG_SIZE_STEPS групп:
-     * 1 — самый тяжёлый тэг, TAG_GROUPS — самый лёгкий.
+     * Квантование в 2*TAG_SIZE_STEPS групп по смешанному баллу:
+     * 70% — абсолютный вес в лог-шкале, 30% — позиция в отсортированном списке.
+     *
+     * Лог-шкала не даёт одному выбросу «схлопнуть» остальные тэги, но при этом
+     * сохраняет разницу в разы: тэг с весом в 10 раз меньше лидера заметно
+     * меньше него. Ранг добавляет разрешение между близкими по весу тэгами.
      */
-    function tagGroup(tag: CatalogTag): number {
-        const ratio = Math.min(1, Math.max(0, tag.matches / maxMatches.value))
-        const bucket = Math.min(TAG_GROUPS, Math.floor(ratio * TAG_GROUPS) + 1)
-        return TAG_GROUPS - bucket + 1
-    }
+    const groupByTagId = computed<Map<string, number>>(() => {
+        const sorted = [...props.tags].sort((left, right) => right.matches - left.matches)
+        const total = sorted.length
+        const groups = new Map<string, number>()
+        if (total === 0) {
+            return groups
+        }
+
+        const maxMatches = sorted[0].matches
+        const maxMagnitude = Math.log1p(maxMatches)
+        let start = 0
+        while (start < total) {
+            let end = start + 1
+            while (end < total && sorted[end].matches === sorted[start].matches) {
+                end++
+            }
+
+            let group: number
+            if (sorted[start].matches === maxMatches) {
+                group = 1
+            } else {
+                const averagePosition = (start + end - 1) / 2
+                const rankScore = total > 1 ? 1 - averagePosition / (total - 1) : 1
+                const magnitude = maxMagnitude > 0
+                    ? Math.log1p(sorted[start].matches) / maxMagnitude
+                    : 1
+                const score = MAGNITUDE_SHARE * magnitude + RANK_SHARE * rankScore
+                const bucket = Math.min(
+                    TAG_GROUPS,
+                    Math.max(1, Math.floor(score * TAG_GROUPS) + 1)
+                )
+                group = TAG_GROUPS - bucket + 1
+            }
+
+            for (let position = start; position < end; position++) {
+                groups.set(sorted[position].id, group)
+            }
+            start = end
+        }
+
+        return groups
+    })
 
     function tagStyle(tag: CatalogTag): Record<string, string> {
-        const group = tagGroup(tag)
+        const group = groupByTagId.value.get(tag.id) ?? 1
 
         if (group <= TAG_SIZE_STEPS) {
             const step = (group - 1) / GROUP_SPAN

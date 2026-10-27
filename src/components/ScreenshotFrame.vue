@@ -1,13 +1,17 @@
 <template>
-  <figure class="frame" :class="{ 'frame--full': full, 'frame--admin': auth.isAdmin }">
+  <figure
+    class="frame"
+    :class="{ 'frame--full': full, 'frame--admin': auth.isAdmin, 'frame--compact': compact }"
+  >
     <div v-if="$slots.topbar" class="frame-topbar">
       <slot name="topbar"></slot>
     </div>
     <div
+      ref="stageEl"
       class="image-wrap"
       :class="{ 'effect-halftone': halftone, 'effect-blur': blur }"
     >
-      <div class="frame-box" :style="[aspectStyle, effectStyle]">
+      <div class="frame-box" :style="[aspectStyle, boxStyle, effectStyle]">
         <div v-if="!loaded" class="placeholder">Загрузка кадра...</div>
         <img
           v-if="url"
@@ -31,42 +35,6 @@
 
         <div v-if="blur" class="fx-vignette" aria-hidden="true"></div>
         <div v-if="showMeta" class="bottom-scrim" aria-hidden="true"></div>
-
-        <div v-if="canConfigure || auth.isAdmin" class="fx-dock">
-          <router-link
-            v-if="auth.isAdmin"
-            class="fx-btn"
-            :to="`/archive/matches/${card.matchId}`"
-            title="Редактировать кадр"
-            aria-label="Редактировать кадр"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 20h9" />
-              <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z" />
-            </svg>
-          </router-link>
-          <button
-            v-if="canConfigure"
-            class="fx-btn"
-            type="button"
-            :class="{ active: effectsOpen }"
-            :title="effectsOpen ? 'Скрыть настройки эффектов' : 'Настроить эффекты'"
-            aria-label="Настройки эффектов"
-            @click="effectsOpen = !effectsOpen"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="4" y1="21" x2="4" y2="14" />
-              <line x1="4" y1="10" x2="4" y2="3" />
-              <line x1="12" y1="21" x2="12" y2="12" />
-              <line x1="12" y1="8" x2="12" y2="3" />
-              <line x1="20" y1="21" x2="20" y2="16" />
-              <line x1="20" y1="12" x2="20" y2="3" />
-              <line x1="1" y1="14" x2="7" y2="14" />
-              <line x1="9" y1="8" x2="15" y2="8" />
-              <line x1="17" y1="16" x2="23" y2="16" />
-            </svg>
-          </button>
-        </div>
 
         <div
           v-if="canConfigure && effectsOpen"
@@ -164,6 +132,61 @@
           <span>{{ formatViews(card.views) }}</span>
         </div>
 
+
+        <CommentsDialog
+          v-if="commentsOpen"
+          :screenshot-id="card.id"
+          @close="commentsOpen = false"
+          @created="onCommentCreated"
+        />
+
+        <ShareDialog
+          v-if="shareOpen"
+          :screenshot-id="card.id"
+          @close="shareOpen = false"
+        />
+      </div>
+      <div ref="barEl" class="frame-bar">
+        <div class="frame-bar-left">
+          <slot name="dock"></slot>
+
+          <div v-if="canConfigure || auth.isAdmin" class="fx-dock">
+            <router-link
+              v-if="auth.isAdmin"
+              class="fx-btn"
+              :to="`/archive/matches/${card.matchId}`"
+              title="Редактировать кадр"
+              aria-label="Редактировать кадр"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z" />
+              </svg>
+            </router-link>
+            <button
+              v-if="canConfigure"
+              class="fx-btn"
+              type="button"
+              :class="{ active: effectsOpen }"
+              :title="effectsOpen ? 'Скрыть настройки эффектов' : 'Настроить эффекты'"
+              aria-label="Настройки эффектов"
+              @click="effectsOpen = !effectsOpen"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="4" y1="21" x2="4" y2="14" />
+                <line x1="4" y1="10" x2="4" y2="3" />
+                <line x1="12" y1="21" x2="12" y2="12" />
+                <line x1="12" y1="8" x2="12" y2="3" />
+                <line x1="20" y1="21" x2="20" y2="16" />
+                <line x1="20" y1="12" x2="20" y2="3" />
+                <line x1="1" y1="14" x2="7" y2="14" />
+                <line x1="9" y1="8" x2="15" y2="8" />
+                <line x1="17" y1="16" x2="23" y2="16" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
         <div v-if="showViews || actionable || showSocialActions" class="frame-actions">
           <div
             v-if="showViews && !viewsTopRight"
@@ -224,19 +247,6 @@
             </svg>
           </button>
         </div>
-
-        <CommentsDialog
-          v-if="commentsOpen"
-          :screenshot-id="card.id"
-          @close="commentsOpen = false"
-          @created="onCommentCreated"
-        />
-
-        <ShareDialog
-          v-if="shareOpen"
-          :screenshot-id="card.id"
-          @close="shareOpen = false"
-        />
       </div>
     </div>
 
@@ -419,6 +429,69 @@ const aspectStyle = computed<CSSProperties>(() => ({
   aspectRatio: `${props.card.width} / ${props.card.height}`,
   '--frame-ratio': `${props.card.width / Math.max(1, props.card.height)}`
 } as CSSProperties))
+
+/*
+ * Компактный режим: маленький экран в портретной ориентации.
+ * Кадр должен целиком поместиться над строкой кнопок, поэтому его размер
+ * считается по фактическим размерам сцены, а не через container queries.
+ */
+const COMPACT_MEDIA = '(max-width: 1024px) and (orientation: portrait)'
+
+const compact = ref(false)
+const stageEl = ref<HTMLElement | null>(null)
+const barEl = ref<HTMLElement | null>(null)
+const boxSize = ref<{ width: number; height: number } | null>(null)
+
+const boxStyle = computed<CSSProperties>(() => {
+  const size = boxSize.value
+  if (!compact.value || !size) {
+    return {}
+  }
+  return { width: `${size.width}px`, height: `${size.height}px` }
+})
+
+let compactQuery: MediaQueryList | null = null
+let stageObserver: ResizeObserver | null = null
+
+function measureBox(): void {
+  const stage = stageEl.value
+  if (!stage || !compact.value) {
+    boxSize.value = null
+    return
+  }
+  const stageWidth = stage.clientWidth
+  const stageHeight = stage.clientHeight
+  const barHeight = barEl.value ? barEl.value.offsetHeight : 0
+  const gap = barHeight ? Number.parseFloat(getComputedStyle(stage).rowGap) || 0 : 0
+  const availableHeight = Math.max(0, stageHeight - barHeight - gap)
+  if (stageWidth <= 0 || availableHeight <= 0) {
+    return
+  }
+  const ratio = props.card.width / Math.max(1, props.card.height)
+  let width = stageWidth
+  let height = width / ratio
+  if (height > availableHeight) {
+    height = availableHeight
+    width = height * ratio
+  }
+  const next = { width: Math.floor(width), height: Math.floor(height) }
+  const current = boxSize.value
+  if (current && current.width === next.width && current.height === next.height) {
+    return
+  }
+  boxSize.value = next
+}
+
+function applyCompact(matches: boolean): void {
+  compact.value = props.full && matches
+  if (!compact.value) {
+    boxSize.value = null
+  }
+}
+
+function onCompactQueryChange(event: MediaQueryListEvent): void {
+  applyCompact(event.matches)
+}
 
 const effectStyle = computed<CSSProperties>(() => {
   const strength = clamp(halftoneStrength.value, 0, 100) / 100
@@ -1011,6 +1084,18 @@ watch(
   }
 )
 
+watch(compact, () => {
+  void nextTick(measureBox)
+})
+
+watch(
+  () => [props.card.width, props.card.height, props.full],
+  () => {
+    applyCompact(compactQuery ? compactQuery.matches : compact.value)
+    void nextTick(measureBox)
+  }
+)
+
 onMounted(() => {
   auth.update()
   applySettings(settingsStore.settings)
@@ -1022,9 +1107,25 @@ onMounted(() => {
       schedulePixelRender()
     }
   })
+
+  compactQuery = window.matchMedia(COMPACT_MEDIA)
+  applyCompact(compactQuery.matches)
+  compactQuery.addEventListener('change', onCompactQueryChange)
+  stageObserver = new ResizeObserver(() => measureBox())
+  if (stageEl.value) {
+    stageObserver.observe(stageEl.value)
+  }
+  if (barEl.value) {
+    stageObserver.observe(barEl.value)
+  }
+  void nextTick(measureBox)
 })
 
 onBeforeUnmount(() => {
+  compactQuery?.removeEventListener('change', onCompactQueryChange)
+  compactQuery = null
+  stageObserver?.disconnect()
+  stageObserver = null
   if (renderTimer) {
     clearTimeout(renderTimer)
   }
@@ -1105,52 +1206,96 @@ onBeforeUnmount(() => {
 }
 
 /*
- * Новое представление: маленький экран в вертикальной ориентации
- * (телефон/планшет портретом). Кадр виден целиком, сверху чёрная полоса
- * с навигацией у верхнего края кадра, снизу подпись у нижнего края экрана.
+ * Компактный режим: маленький экран в портретной ориентации (телефон/планшет).
+ * Кадр вписан по центру, сразу под ним — строка кнопок на чёрной полосе,
+ * у нижнего края экрана — подпись. Полосы совпадают по цвету с фоном подписи.
+ * Размер кадра приходит из скрипта (measureBox), чтобы не зависеть от
+ * container queries и обрезки. Составной селектор нужен, чтобы перебить
+ * более поздние правила обычного режима и медиазапросы.
  */
-@media (max-width: 1024px) and (orientation: portrait) {
-  .frame--full {
-    padding-bottom: 5.5rem;
-  }
+.frame--full.frame--compact {
+  padding-bottom: 6.5rem;
+  background: var(--bg-main);
+}
 
-  .frame--full .frame-topbar {
-    position: static;
-    flex: 0 0 auto;
-    align-items: flex-end;
-    padding: 0.5rem 0.75rem 0;
-    background: var(--image-bg);
-  }
+.frame--full.frame--compact .frame-topbar {
+  position: static;
+  flex: 0 0 auto;
+  align-items: flex-end;
+  padding: 0.5rem 0.75rem 0;
+  background: var(--bg-main);
+}
 
-  .frame--full .image-wrap {
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    container-type: size;
-  }
+/* Кадр и строка кнопок вместе центрируются по вертикали. */
+.frame--full.frame--compact .image-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: var(--bg-main);
+}
 
-  .frame--full .frame-box {
-    flex: 0 0 auto;
-    width: min(100cqw, calc(100cqh * var(--frame-ratio, 0.5625)));
-    height: auto;
-    max-width: 100%;
-    max-height: 100%;
-  }
+.frame--full.frame--compact .frame-box {
+  flex: 0 0 auto;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+}
 
-  .frame--full .caption {
-    left: 0.75rem;
-    right: 0.75rem;
-    bottom: 0.5rem;
-    max-width: none;
-  }
+/* Строка под кадром: слева фильтр/редактирование/эффекты, справа соц. кнопки. */
+.frame--full.frame--compact .frame-bar {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0 0.75rem;
+}
 
-  /* Браузеры без container query units: кадр заполняет экран как раньше. */
-  @supports not (width: 1cqw) {
-    .frame--full .frame-box {
-      width: 100%;
-      height: 100%;
-    }
-  }
+.frame--full.frame--compact .frame-bar-left {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.frame--full.frame--compact .frame-bar-left > *,
+.frame--full.frame--compact .frame-actions > * {
+  flex: 0 0 auto;
+}
+
+.frame--full.frame--compact .fx-dock {
+  position: static;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.frame--full.frame--compact :deep(.overlay-icon) {
+  position: static;
+}
+
+.frame--full.frame--compact .frame-actions {
+  position: static;
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+/* Счётчик просмотров не помещается в строку на узких экранах. */
+.frame--full.frame--compact .frame-actions .views {
+  display: none;
+}
+
+.frame--full.frame--compact .caption {
+  left: 0.75rem;
+  right: 0.75rem;
+  bottom: 0.5rem;
+  max-width: none;
 }
 
 .image-wrap img,
@@ -1413,6 +1558,17 @@ onBeforeUnmount(() => {
 
 .club {
   color: var(--text-secondary);
+}
+
+/*
+ * Строка кнопок. В обычном режиме обёртки «растворяются» (display: contents),
+ * поэтому кнопки позиционируются как раньше: фильтры/эффекты — сверху,
+ * соц. кнопки — снизу справа. В компактном режиме из них собирается одна
+ * строка под кадром (см. правила .frame--compact выше).
+ */
+.frame-bar,
+.frame-bar-left {
+  display: contents;
 }
 
 .frame-actions {

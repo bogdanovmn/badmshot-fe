@@ -39,7 +39,7 @@
         </button>
       </template>
 
-      <template #overlay>
+      <template #dock>
         <button
           class="overlay-icon filter-btn"
           :class="{ active: hasFilters }"

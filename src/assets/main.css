@@ -47,6 +47,17 @@
   --halftone-ink: rgba(10, 10, 10, 0.92);
   --shadow-strong: 0 24px 70px rgba(0, 0, 0, 0.55);
   --image-bg: var(--accent-dark);
+
+  /* Единый размер круглых кнопок поверх кадра (навигация, лайк, шаринг, фильтры, эффекты) */
+  --frame-btn-size: 64px;
+  --frame-btn-icon: 34px;
+}
+
+@media (max-width: 700px) {
+  :root {
+    --frame-btn-size: 48px;
+    --frame-btn-icon: 26px;
+  }
 }
 
 * {

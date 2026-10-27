@@ -11,11 +11,7 @@
       :busy="liking"
       @toggle-like="toggleLike"
     >
-      <template #overlay>
-        <router-link class="sequence-badge" :to="config.badgeTo" :title="config.badgeTitle">
-          {{ config.badgeText }}
-        </router-link>
-
+      <template #topbar>
         <button
           class="slider-btn prev"
           type="button"
@@ -41,6 +37,12 @@
             <polyline points="9 18 15 12 9 6" />
           </svg>
         </button>
+      </template>
+
+      <template #overlay>
+        <router-link class="sequence-badge" :to="config.badgeTo" :title="config.badgeTitle">
+          {{ config.badgeText }}
+        </router-link>
       </template>
     </ScreenshotFrame>
 
@@ -399,15 +401,11 @@ onMounted(load)
 }
 
 .slider-btn {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 4;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 64px;
-  height: 64px;
+  width: var(--frame-btn-size);
+  height: var(--frame-btn-size);
   padding: 0;
   border: 1px solid var(--overlay-divider);
   border-radius: 50%;
@@ -429,16 +427,8 @@ onMounted(load)
 }
 
 .slider-btn svg {
-  width: 34px;
-  height: 34px;
-}
-
-.slider-btn.prev {
-  left: 0.75rem;
-}
-
-.slider-btn.next {
-  right: 0.75rem;
+  width: var(--frame-btn-icon);
+  height: var(--frame-btn-icon);
 }
 
 .toast {
@@ -462,14 +452,6 @@ onMounted(load)
   .sequence-badge {
     top: 1.25rem;
     left: 2rem;
-  }
-
-  .slider-btn.prev {
-    left: 2rem;
-  }
-
-  .slider-btn.next {
-    right: 2rem;
   }
 }
 </style>

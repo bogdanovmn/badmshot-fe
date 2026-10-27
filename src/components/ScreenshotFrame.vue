@@ -1,178 +1,129 @@
 <template>
-  <figure class="frame" :class="{ 'frame--full': full, 'frame--admin': auth.isAdmin }">
+  <figure
+    ref="figureEl"
+    class="frame"
+    :class="{ 'frame--full': full, 'frame--admin': auth.isAdmin, 'frame--compact': compact }"
+  >
+    <div v-if="$slots.topbar" ref="topbarEl" class="frame-topbar" :style="topbarStyle">
+      <slot name="topbar"></slot>
+    </div>
     <div
+      ref="stageEl"
       class="image-wrap"
       :class="{ 'effect-halftone': halftone, 'effect-blur': blur }"
-      :style="[full ? null : aspectStyle, effectStyle]"
     >
-      <div v-if="!loaded" class="placeholder">Загрузка кадра...</div>
-      <img
-        v-if="url"
-        ref="frameImg"
-        :src="url"
-        :alt="altText"
-        loading="lazy"
-        :style="{ filter: imageFilter }"
-        @load="loaded = true"
-        @error="loaded = true"
-      />
-      <canvas
-        ref="pixelCanvas"
-        class="fx-pixel"
-        :class="{ visible: pixelReady && pixelEffectsActive() }"
-        :style="{ filter: imageFilter }"
-        aria-hidden="true"
-      ></canvas>
+      <div ref="boxEl" class="frame-box" :style="[aspectStyle, boxStyle, effectStyle]">
+        <div v-if="!loaded" class="placeholder">Загрузка кадра...</div>
+        <img
+          v-if="url"
+          ref="frameImg"
+          :src="url"
+          :alt="altText"
+          loading="lazy"
+          :style="{ filter: imageFilter }"
+          @load="loaded = true"
+          @error="loaded = true"
+        />
+        <canvas
+          ref="pixelCanvas"
+          class="fx-pixel"
+          :class="{ visible: pixelReady && pixelEffectsActive() }"
+          :style="{ filter: imageFilter }"
+          aria-hidden="true"
+        ></canvas>
 
-      <div v-if="halftone" class="fx-halftone" aria-hidden="true"></div>
+        <div v-if="halftone" class="fx-halftone" aria-hidden="true"></div>
 
-      <div v-if="blur" class="fx-vignette" aria-hidden="true"></div>
-      <div v-if="showMeta" class="bottom-scrim" aria-hidden="true"></div>
+        <div v-if="blur" class="fx-vignette" aria-hidden="true"></div>
+        <div v-if="showMeta" class="bottom-scrim" aria-hidden="true"></div>
 
-      <div v-if="canConfigure || auth.isAdmin" class="fx-dock">
-        <router-link
-          v-if="auth.isAdmin"
-          class="fx-btn"
-          :to="`/archive/matches/${card.matchId}`"
-          title="Редактировать кадр"
-          aria-label="Редактировать кадр"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 20h9" />
-            <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z" />
-          </svg>
-        </router-link>
-        <button
-          v-if="canConfigure"
-          class="fx-btn"
-          type="button"
-          :class="{ active: effectsOpen }"
-          :title="effectsOpen ? 'Скрыть настройки эффектов' : 'Настроить эффекты'"
-          aria-label="Настройки эффектов"
-          @click="effectsOpen = !effectsOpen"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="4" y1="21" x2="4" y2="14" />
-            <line x1="4" y1="10" x2="4" y2="3" />
-            <line x1="12" y1="21" x2="12" y2="12" />
-            <line x1="12" y1="8" x2="12" y2="3" />
-            <line x1="20" y1="21" x2="20" y2="16" />
-            <line x1="20" y1="12" x2="20" y2="3" />
-            <line x1="1" y1="14" x2="7" y2="14" />
-            <line x1="9" y1="8" x2="15" y2="8" />
-            <line x1="17" y1="16" x2="23" y2="16" />
-          </svg>
-        </button>
-      </div>
-
-      <div
-        v-if="canConfigure && effectsOpen"
-        class="fx-controls"
-        :class="{ 'fx-controls--with-edit': auth.isAdmin }"
-      >
-        <div class="fx-item">
-          <label class="fx-toggle">
-            <input v-model="halftone" type="checkbox" />
-            <span>Газетная сетка</span>
-          </label>
-          <label v-if="halftone" class="fx-slider">
-            <span>Сила <em>{{ halftoneStrength }}</em></span>
-            <input v-model.number="halftoneStrength" type="range" min="0" max="100" step="1" />
-          </label>
-        </div>
-
-        <div class="fx-item">
-          <label class="fx-toggle">
-            <input v-model="blur" type="checkbox" />
-            <span>Кино-размытие</span>
-          </label>
-          <label v-if="blur" class="fx-slider">
-            <span>Сила <em>{{ blurStrength }}</em></span>
-            <input v-model.number="blurStrength" type="range" min="0" max="100" step="1" />
-          </label>
-        </div>
-
-        <div class="fx-item">
-          <label class="fx-toggle">
-            <input v-model="pixelate" type="checkbox" />
-            <span>Ретро-пиксели</span>
-          </label>
-          <label v-if="pixelate" class="fx-slider">
-            <span>Пиксель <em>{{ pixelStrength }}</em></span>
-            <input v-model.number="pixelStrength" type="range" min="0" max="100" step="1" />
-          </label>
-          <label v-if="pixelate" class="fx-slider">
-            <span>Цвета <em>{{ pixelColors }}</em></span>
-            <input v-model.number="pixelColors" type="range" min="2" max="16" step="1" />
-          </label>
-        </div>
-
-        <div class="fx-item">
-          <label class="fx-toggle">
-            <input v-model="edgePixelate" type="checkbox" />
-            <span>Пиксели к краям</span>
-          </label>
-          <label v-if="edgePixelate" class="fx-slider">
-            <span>Сила <em>{{ edgePixelStrength }}</em></span>
-            <input v-model.number="edgePixelStrength" type="range" min="0" max="100" step="1" />
-          </label>
-        </div>
-
-        <div class="fx-item">
-          <label class="fx-toggle">
-            <input v-model="transitionEnabled" type="checkbox" />
-            <span>Пиксельный переход</span>
-          </label>
-          <template v-if="transitionEnabled">
-            <label class="fx-slider">
-              <span>Задержка <em>{{ transitionDuration }} мс</em></span>
-              <input v-model.number="transitionDuration" type="range" min="1000" max="8000" step="100" />
-            </label>
-            <label class="fx-slider">
-              <span>Пикселизация <em>{{ transitionPixels }}</em></span>
-              <input v-model.number="transitionPixels" type="range" min="0" max="100" step="1" />
-            </label>
-          </template>
-        </div>
-
-        <button
-          class="fx-save"
-          type="button"
-          :disabled="!settingsDirty || saveState === 'saving'"
-          @click="saveSettings"
-        >
-          {{ saveState === 'saving' ? 'Сохранение...' : 'Сохранить' }}
-        </button>
-
-        <p class="fx-hint fx-status">{{ saveStatusText }}</p>
-      </div>
-
-      <div v-if="showMeta" class="caption">
-        <div v-if="card.players.length" class="players">{{ card.players.join(' · ') }}</div>
-        <div class="meta-row">
-          <span v-if="card.matchDate" class="date">{{ formatDate(card.matchDate) }}</span>
-          <span v-if="card.clubName" class="club">{{ card.clubName }}</span>
-        </div>
-      </div>
-
-      <slot name="overlay"></slot>
-
-      <div
-        v-if="showViews && viewsTopRight"
-        class="views views--top-right"
-        :title="`Просмотров: ${formatViews(card.views)}`"
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-          <circle cx="12" cy="12" r="3" />
-        </svg>
-        <span>{{ formatViews(card.views) }}</span>
-      </div>
-
-      <div v-if="showViews || actionable || showSocialActions" class="frame-actions">
         <div
-          v-if="showViews && !viewsTopRight"
-          class="views"
+          v-if="canConfigure && effectsOpen"
+          class="fx-controls"
+          :class="{ 'fx-controls--with-edit': auth.isAdmin }"
+        >
+          <div class="fx-item">
+            <label class="fx-toggle">
+              <input v-model="halftone" type="checkbox" />
+              <span>Газетная сетка</span>
+            </label>
+            <label v-if="halftone" class="fx-slider">
+              <span>Сила <em>{{ halftoneStrength }}</em></span>
+              <input v-model.number="halftoneStrength" type="range" min="0" max="100" step="1" />
+            </label>
+          </div>
+
+          <div class="fx-item">
+            <label class="fx-toggle">
+              <input v-model="blur" type="checkbox" />
+              <span>Кино-размытие</span>
+            </label>
+            <label v-if="blur" class="fx-slider">
+              <span>Сила <em>{{ blurStrength }}</em></span>
+              <input v-model.number="blurStrength" type="range" min="0" max="100" step="1" />
+            </label>
+          </div>
+
+          <div class="fx-item">
+            <label class="fx-toggle">
+              <input v-model="pixelate" type="checkbox" />
+              <span>Ретро-пиксели</span>
+            </label>
+            <label v-if="pixelate" class="fx-slider">
+              <span>Пиксель <em>{{ pixelStrength }}</em></span>
+              <input v-model.number="pixelStrength" type="range" min="0" max="100" step="1" />
+            </label>
+            <label v-if="pixelate" class="fx-slider">
+              <span>Цвета <em>{{ pixelColors }}</em></span>
+              <input v-model.number="pixelColors" type="range" min="2" max="16" step="1" />
+            </label>
+          </div>
+
+          <div class="fx-item">
+            <label class="fx-toggle">
+              <input v-model="edgePixelate" type="checkbox" />
+              <span>Пиксели к краям</span>
+            </label>
+            <label v-if="edgePixelate" class="fx-slider">
+              <span>Сила <em>{{ edgePixelStrength }}</em></span>
+              <input v-model.number="edgePixelStrength" type="range" min="0" max="100" step="1" />
+            </label>
+          </div>
+
+          <div class="fx-item">
+            <label class="fx-toggle">
+              <input v-model="transitionEnabled" type="checkbox" />
+              <span>Пиксельный переход</span>
+            </label>
+            <template v-if="transitionEnabled">
+              <label class="fx-slider">
+                <span>Задержка <em>{{ transitionDuration }} мс</em></span>
+                <input v-model.number="transitionDuration" type="range" min="1000" max="8000" step="100" />
+              </label>
+              <label class="fx-slider">
+                <span>Пикселизация <em>{{ transitionPixels }}</em></span>
+                <input v-model.number="transitionPixels" type="range" min="0" max="100" step="1" />
+              </label>
+            </template>
+          </div>
+
+          <button
+            class="fx-save"
+            type="button"
+            :disabled="!settingsDirty || saveState === 'saving'"
+            @click="saveSettings"
+          >
+            {{ saveState === 'saving' ? 'Сохранение...' : 'Сохранить' }}
+          </button>
+
+          <p class="fx-hint fx-status">{{ saveStatusText }}</p>
+        </div>
+
+        <slot name="overlay"></slot>
+
+        <div
+          v-if="showViews && viewsTopRight"
+          class="views views--top-right"
           :title="`Просмотров: ${formatViews(card.views)}`"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -182,66 +133,130 @@
           <span>{{ formatViews(card.views) }}</span>
         </div>
 
-        <button
-          v-if="showShareAction"
-          class="action-btn"
-          type="button"
-          title="Поделиться кадром"
-          aria-label="Поделиться кадром"
-          @click="shareOpen = true"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="18" cy="5" r="3" />
-            <circle cx="6" cy="12" r="3" />
-            <circle cx="18" cy="19" r="3" />
-            <line x1="8.59" y1="10.51" x2="15.42" y2="6.49" />
-            <line x1="8.59" y1="13.49" x2="15.42" y2="17.51" />
-          </svg>
-        </button>
 
-        <button
-          v-if="showSocialActions"
-          class="action-btn comment-btn"
-          type="button"
-          :title="commentsCount > 0 ? `Комментарии: ${formatViews(commentsCount)}` : 'Комментировать'"
-          aria-label="Комментарии"
-          @click="commentsOpen = true"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            <line x1="8" y1="9" x2="16" y2="9" />
-            <line x1="8" y1="13" x2="13" y2="13" />
-          </svg>
-          <span v-if="commentsCount > 0" class="action-badge">{{ formatViews(commentsCount) }}</span>
-        </button>
+        <CommentsDialog
+          v-if="commentsOpen"
+          :screenshot-id="card.id"
+          @close="commentsOpen = false"
+          @created="onCommentCreated"
+        />
 
-        <button
-          v-if="actionable"
-          class="action-btn like-btn"
-          :class="{ active: card.liked }"
-          :disabled="busy"
-          :title="card.liked ? 'Убрать из любимых' : 'В любимые'"
-          :aria-label="card.liked ? 'Убрать из любимых' : 'В любимые'"
-          @click="emit('toggle-like')"
-        >
-          <svg viewBox="0 0 24 24" :fill="card.liked ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-          </svg>
-        </button>
+        <ShareDialog
+          v-if="shareOpen"
+          :screenshot-id="card.id"
+          @close="shareOpen = false"
+        />
       </div>
+      <div ref="barEl" class="frame-bar">
+        <div class="frame-bar-left">
+          <slot name="dock"></slot>
 
-      <CommentsDialog
-        v-if="commentsOpen"
-        :screenshot-id="card.id"
-        @close="commentsOpen = false"
-        @created="onCommentCreated"
-      />
+          <div v-if="canConfigure || auth.isAdmin" class="fx-dock">
+            <router-link
+              v-if="auth.isAdmin"
+              class="fx-btn"
+              :to="`/archive/matches/${card.matchId}`"
+              title="Редактировать кадр"
+              aria-label="Редактировать кадр"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z" />
+              </svg>
+            </router-link>
+            <button
+              v-if="canConfigure"
+              class="fx-btn"
+              type="button"
+              :class="{ active: effectsOpen }"
+              :title="effectsOpen ? 'Скрыть настройки эффектов' : 'Настроить эффекты'"
+              aria-label="Настройки эффектов"
+              @click="effectsOpen = !effectsOpen"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="4" y1="21" x2="4" y2="14" />
+                <line x1="4" y1="10" x2="4" y2="3" />
+                <line x1="12" y1="21" x2="12" y2="12" />
+                <line x1="12" y1="8" x2="12" y2="3" />
+                <line x1="20" y1="21" x2="20" y2="16" />
+                <line x1="20" y1="12" x2="20" y2="3" />
+                <line x1="1" y1="14" x2="7" y2="14" />
+                <line x1="9" y1="8" x2="15" y2="8" />
+                <line x1="17" y1="16" x2="23" y2="16" />
+              </svg>
+            </button>
+          </div>
+        </div>
 
-      <ShareDialog
-        v-if="shareOpen"
-        :screenshot-id="card.id"
-        @close="shareOpen = false"
-      />
+        <div v-if="showViews || actionable || showSocialActions" class="frame-actions">
+          <div
+            v-if="showViews && !viewsTopRight"
+            class="views"
+            :title="`Просмотров: ${formatViews(card.views)}`"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+            <span>{{ formatViews(card.views) }}</span>
+          </div>
+
+          <button
+            v-if="showShareAction"
+            class="action-btn"
+            type="button"
+            title="Поделиться кадром"
+            aria-label="Поделиться кадром"
+            @click="shareOpen = true"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="18" cy="5" r="3" />
+              <circle cx="6" cy="12" r="3" />
+              <circle cx="18" cy="19" r="3" />
+              <line x1="8.59" y1="10.51" x2="15.42" y2="6.49" />
+              <line x1="8.59" y1="13.49" x2="15.42" y2="17.51" />
+            </svg>
+          </button>
+
+          <button
+            v-if="showSocialActions"
+            class="action-btn comment-btn"
+            type="button"
+            :title="commentsCount > 0 ? `Комментарии: ${formatViews(commentsCount)}` : 'Комментировать'"
+            aria-label="Комментарии"
+            @click="commentsOpen = true"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              <line x1="8" y1="9" x2="16" y2="9" />
+              <line x1="8" y1="13" x2="13" y2="13" />
+            </svg>
+            <span v-if="commentsCount > 0" class="action-badge">{{ formatViews(commentsCount) }}</span>
+          </button>
+
+          <button
+            v-if="actionable"
+            class="action-btn like-btn"
+            :class="{ active: card.liked }"
+            :disabled="busy"
+            :title="card.liked ? 'Убрать из любимых' : 'В любимые'"
+            :aria-label="card.liked ? 'Убрать из любимых' : 'В любимые'"
+            @click="emit('toggle-like')"
+          >
+            <svg viewBox="0 0 24 24" :fill="card.liked ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="showMeta" class="caption">
+      <div v-if="card.players.length" class="players">{{ card.players.join(' · ') }}</div>
+      <div class="meta-row">
+        <span v-if="card.matchDate" class="date">{{ formatDate(card.matchDate) }}</span>
+        <span v-if="card.clubName" class="club">{{ card.clubName }}</span>
+      </div>
     </div>
   </figure>
 </template>
@@ -411,9 +426,130 @@ function releaseObjectUrl() {
   }
 }
 
+/*
+ * Компактный режим: маленький экран в портретной ориентации.
+ * Кадр должен целиком поместиться над строкой кнопок, поэтому его размер
+ * считается по фактическим размерам сцены, а не через container queries.
+ */
+const COMPACT_MEDIA = '(max-width: 1024px) and (orientation: portrait)'
+
+const compact = ref(false)
+const figureEl = ref<HTMLElement | null>(null)
+const stageEl = ref<HTMLElement | null>(null)
+const barEl = ref<HTMLElement | null>(null)
+const boxEl = ref<HTMLElement | null>(null)
+const topbarEl = ref<HTMLElement | null>(null)
+const boxSize = ref<{ width: number; height: number } | null>(null)
+const navShift = ref(0)
+
+/*
+ * В компактном режиме кадр обрезается по краям, чтобы он занимал больше
+ * высоты при той же ширине. Картинка лежит с object-fit: cover и сама
+ * подрезает равные доли слева и справа.
+ */
+const COMPACT_SIDE_CROP = 0.15
+
+const frameRatio = computed(() => {
+  const width = Math.max(1, props.card.width)
+  const height = Math.max(1, props.card.height)
+  return compact.value
+    ? (width * (1 - COMPACT_SIDE_CROP * 2)) / height
+    : width / height
+})
+
 const aspectStyle = computed<CSSProperties>(() => ({
-  aspectRatio: `${props.card.width} / ${props.card.height}`
-}))
+  aspectRatio: `${frameRatio.value}`,
+  '--frame-ratio': `${frameRatio.value}`
+} as CSSProperties))
+
+const boxStyle = computed<CSSProperties>(() => {
+  const size = boxSize.value
+  if (!compact.value || !size) {
+    return {}
+  }
+  return { width: `${size.width}px`, height: `${size.height}px` }
+})
+
+/*
+ * Кнопки смены кадра в компактном режиме центрируются по верхней чёрной
+ * полосе (от верха кадра до кадра), а не по своей строке. Сдвиг считается
+ * по фактическим координатам, чтобы не зависеть от высоты панели.
+ */
+const topbarStyle = computed<CSSProperties>(() => {
+  if (!compact.value || !navShift.value) {
+    return {}
+  }
+  return { transform: `translateY(${navShift.value}px)` }
+})
+
+let compactQuery: MediaQueryList | null = null
+let stageObserver: ResizeObserver | null = null
+
+function measureBox(): void {
+  const stage = stageEl.value
+  if (!stage || !compact.value) {
+    boxSize.value = null
+    return
+  }
+  const stageWidth = stage.clientWidth
+  const stageHeight = stage.clientHeight
+  const barHeight = barEl.value ? barEl.value.offsetHeight : 0
+  const gap = barHeight ? Number.parseFloat(getComputedStyle(stage).rowGap) || 0 : 0
+  const availableHeight = Math.max(0, stageHeight - barHeight - gap)
+  if (stageWidth <= 0 || availableHeight <= 0) {
+    return
+  }
+  const ratio = frameRatio.value
+  let width = stageWidth
+  let height = width / ratio
+  if (height > availableHeight) {
+    height = availableHeight
+    width = height * ratio
+  }
+  const next = { width: Math.floor(width), height: Math.floor(height) }
+  const current = boxSize.value
+  if (current && current.width === next.width && current.height === next.height) {
+    return
+  }
+  boxSize.value = next
+}
+
+function updateNavShift(): void {
+  const figure = figureEl.value
+  const topbar = topbarEl.value
+  const box = boxEl.value
+  if (!compact.value || !figure || !topbar || !box) {
+    navShift.value = 0
+    return
+  }
+  const figureTop = figure.getBoundingClientRect().top
+  const bandHeight = box.getBoundingClientRect().top - figureTop
+  // Ориентируемся на саму кнопку навигации (у панели может быть свой padding).
+  const nav = (topbar.firstElementChild as HTMLElement | null) ?? topbar
+  // Текущий центр берём без учёта уже применённого сдвига.
+  const navCenter = nav.getBoundingClientRect().top - figureTop + nav.offsetHeight / 2 - navShift.value
+  const next = Math.max(0, Math.round(bandHeight / 2 - navCenter))
+  if (next !== navShift.value) {
+    navShift.value = next
+  }
+}
+
+function measure(): void {
+  measureBox()
+  void nextTick(updateNavShift)
+}
+
+function applyCompact(matches: boolean): void {
+  compact.value = props.full && matches
+  if (!compact.value) {
+    boxSize.value = null
+    navShift.value = 0
+  }
+}
+
+function onCompactQueryChange(event: MediaQueryListEvent): void {
+  applyCompact(event.matches)
+}
 
 const effectStyle = computed<CSSProperties>(() => {
   const strength = clamp(halftoneStrength.value, 0, 100) / 100
@@ -1006,6 +1142,18 @@ watch(
   }
 )
 
+watch(compact, () => {
+  measure()
+})
+
+watch(
+  () => [props.card.width, props.card.height, props.full],
+  () => {
+    applyCompact(compactQuery ? compactQuery.matches : compact.value)
+    measure()
+  }
+)
+
 onMounted(() => {
   auth.update()
   applySettings(settingsStore.settings)
@@ -1017,9 +1165,25 @@ onMounted(() => {
       schedulePixelRender()
     }
   })
+
+  compactQuery = window.matchMedia(COMPACT_MEDIA)
+  applyCompact(compactQuery.matches)
+  compactQuery.addEventListener('change', onCompactQueryChange)
+  stageObserver = new ResizeObserver(() => measure())
+  if (stageEl.value) {
+    stageObserver.observe(stageEl.value)
+  }
+  if (barEl.value) {
+    stageObserver.observe(barEl.value)
+  }
+  measure()
 })
 
 onBeforeUnmount(() => {
+  compactQuery?.removeEventListener('change', onCompactQueryChange)
+  compactQuery = null
+  stageObserver?.disconnect()
+  stageObserver = null
   if (renderTimer) {
     clearTimeout(renderTimer)
   }
@@ -1035,6 +1199,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .frame {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
@@ -1048,9 +1213,35 @@ onBeforeUnmount(() => {
   height: 100%;
   min-height: 0;
   margin: 0;
+  gap: 0;
+}
+
+/*
+ * Обычный режим: кнопки навигации лежат поверх кадра по центру его высоты.
+ * В мобильном вертикальном режиме (см. медиазапрос ниже) панель становится
+ * чёрной полосой над кадром.
+ */
+.frame-topbar {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0.75rem;
+  pointer-events: none;
+}
+
+.frame-topbar > * {
+  pointer-events: auto;
 }
 
 .image-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.frame-box {
   position: relative;
   width: 100%;
   overflow: hidden;
@@ -1060,10 +1251,120 @@ onBeforeUnmount(() => {
 }
 
 .frame--full .image-wrap {
-  border-radius: 0;
-  height: 100%;
-  max-height: none;
+  flex: 1 1 auto;
+  min-height: 0;
   background: var(--image-bg);
+  overflow: hidden;
+}
+
+.frame--full .frame-box {
+  height: 100%;
+  border-radius: 0;
+  background: var(--image-bg);
+}
+
+/*
+ * Компактный режим: маленький экран в портретной ориентации (телефон/планшет).
+ * Кадр вписан по центру, сразу под ним — строка кнопок на чёрной полосе,
+ * у нижнего края экрана — подпись. Полосы совпадают по цвету с фоном подписи.
+ * Размер кадра приходит из скрипта (measureBox), чтобы не зависеть от
+ * container queries и обрезки. Составной селектор нужен, чтобы перебить
+ * более поздние правила обычного режима и медиазапросы.
+ */
+.frame--full.frame--compact {
+  padding-bottom: 6.5rem;
+  background: var(--bg-main);
+}
+
+.frame--full.frame--compact .frame-topbar {
+  position: static;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 0.5rem 0.75rem 0;
+  background: var(--bg-main);
+}
+
+/* Кнопки смены кадра чуть крупнее остальных кнопок кадра. */
+.frame--full.frame--compact :deep(.frame-topbar .slider-btn) {
+  width: calc(var(--frame-btn-size) * 1.18);
+  height: calc(var(--frame-btn-size) * 1.18);
+}
+
+.frame--full.frame--compact :deep(.frame-topbar .slider-btn svg) {
+  width: calc(var(--frame-btn-icon) * 1.18);
+  height: calc(var(--frame-btn-icon) * 1.18);
+}
+
+/* Кадр и строка кнопок вместе центрируются по вертикали. */
+.frame--full.frame--compact .image-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: var(--bg-main);
+}
+
+.frame--full.frame--compact .frame-box {
+  flex: 0 0 auto;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+/* Строка под кадром: слева фильтр/редактирование/эффекты, справа соц. кнопки. */
+.frame--full.frame--compact .frame-bar {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0 0.75rem;
+}
+
+.frame--full.frame--compact .frame-bar-left {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.frame--full.frame--compact .frame-bar-left > *,
+.frame--full.frame--compact .frame-actions > * {
+  flex: 0 0 auto;
+}
+
+.frame--full.frame--compact .fx-dock {
+  position: static;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.frame--full.frame--compact :deep(.overlay-icon) {
+  position: static;
+}
+
+.frame--full.frame--compact .frame-actions {
+  position: static;
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+/* Счётчик просмотров не помещается в строку на узких экранах. */
+.frame--full.frame--compact .frame-actions .views {
+  display: none;
+}
+
+.frame--full.frame--compact .caption {
+  left: 0.75rem;
+  right: 0.75rem;
+  bottom: 0.5rem;
+  max-width: none;
 }
 
 .image-wrap img,
@@ -1161,8 +1462,8 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 64px;
-  height: 64px;
+  width: var(--frame-btn-size);
+  height: var(--frame-btn-size);
   padding: 0;
   border: 1px solid var(--overlay-divider);
   border-radius: 50%;
@@ -1179,20 +1480,20 @@ onBeforeUnmount(() => {
 }
 
 .fx-btn svg {
-  width: 34px;
-  height: 34px;
+  width: var(--frame-btn-icon);
+  height: var(--frame-btn-icon);
 }
 
 .fx-controls {
   position: absolute;
-  top: calc(0.75rem + 64px + 0.45rem);
+  top: calc(0.75rem + var(--frame-btn-size) + 0.45rem);
   right: 0.75rem;
   z-index: 4;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
   width: min(260px, calc(100vw - 1.5rem));
-  max-height: calc(50% - 7rem);
+  max-height: calc(100% - var(--frame-btn-size) - 2.5rem);
   padding: 0.6rem;
   border: 1px solid var(--overlay-divider);
   border-radius: 10px;
@@ -1203,7 +1504,8 @@ onBeforeUnmount(() => {
 }
 
 .fx-controls--with-edit {
-  top: calc(0.75rem + 2 * 64px + 2 * 0.45rem);
+  top: calc(0.75rem + 2 * var(--frame-btn-size) + 2 * 0.45rem);
+  max-height: calc(100% - 2 * var(--frame-btn-size) - 3rem);
 }
 
 .fx-save {
@@ -1327,6 +1629,17 @@ onBeforeUnmount(() => {
   color: var(--text-secondary);
 }
 
+/*
+ * Строка кнопок. В обычном режиме обёртки «растворяются» (display: contents),
+ * поэтому кнопки позиционируются как раньше: фильтры/эффекты — сверху,
+ * соц. кнопки — снизу справа. В компактном режиме из них собирается одна
+ * строка под кадром (см. правила .frame--compact выше).
+ */
+.frame-bar,
+.frame-bar-left {
+  display: contents;
+}
+
 .frame-actions {
   position: absolute;
   right: 0.75rem;
@@ -1359,8 +1672,8 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 64px;
-  height: 64px;
+  width: var(--frame-btn-size);
+  height: var(--frame-btn-size);
   padding: 0;
   border: 1px solid var(--overlay-divider);
   border-radius: 50%;
@@ -1387,8 +1700,8 @@ onBeforeUnmount(() => {
 }
 
 .action-btn svg {
-  width: 34px;
-  height: 34px;
+  width: var(--frame-btn-icon);
+  height: var(--frame-btn-icon);
 }
 
 .action-badge {
@@ -1414,6 +1727,10 @@ onBeforeUnmount(() => {
 }
 
 @media (min-width: 900px) {
+  .frame-topbar {
+    padding: 0 2rem;
+  }
+
   .frame--full .caption {
     left: 2.5rem;
     bottom: 2rem;
@@ -1430,12 +1747,12 @@ onBeforeUnmount(() => {
   }
 
   .fx-controls {
-    top: calc(1.25rem + 64px + 0.45rem);
+    top: calc(1.25rem + var(--frame-btn-size) + 0.45rem);
     right: 2rem;
   }
 
   .fx-controls--with-edit {
-    top: calc(1.25rem + 2 * 64px + 2 * 0.45rem);
+    top: calc(1.25rem + 2 * var(--frame-btn-size) + 2 * 0.45rem);
   }
 }
 
@@ -1446,16 +1763,6 @@ onBeforeUnmount(() => {
 
   .frame-actions {
     gap: 0.4rem;
-  }
-
-  .action-btn {
-    width: 48px;
-    height: 48px;
-  }
-
-  .action-btn svg {
-    width: 26px;
-    height: 26px;
   }
 
   .action-badge {
@@ -1492,7 +1799,7 @@ onBeforeUnmount(() => {
 }
 
 .frame--admin .views--top-right {
-  right: calc(0.75rem + 64px + 0.5rem);
+  right: calc(0.75rem + var(--frame-btn-size) + 0.5rem);
 }
 
 @media (min-width: 900px) {
@@ -1502,7 +1809,7 @@ onBeforeUnmount(() => {
   }
 
   .frame--admin.frame--full .views--top-right {
-    right: calc(2rem + 64px + 0.5rem);
+    right: calc(2rem + var(--frame-btn-size) + 0.5rem);
   }
 }
 </style>

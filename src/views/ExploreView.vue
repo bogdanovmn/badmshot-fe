@@ -11,21 +11,7 @@
       :busy="liking"
       @toggle-like="toggleLike"
     >
-      <template #overlay>
-        <button
-          class="overlay-icon filter-btn"
-          :class="{ active: hasFilters }"
-          type="button"
-          title="Фильтры"
-          aria-label="Фильтры"
-          @click="filterOpen = true"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-          </svg>
-          <span v-if="hasFilters" class="filter-dot" aria-hidden="true"></span>
-        </button>
-
+      <template #topbar>
         <button
           class="slider-btn prev"
           type="button"
@@ -50,6 +36,22 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="9 18 15 12 9 6" />
           </svg>
+        </button>
+      </template>
+
+      <template #dock>
+        <button
+          class="overlay-icon filter-btn"
+          :class="{ active: hasFilters }"
+          type="button"
+          title="Фильтры"
+          aria-label="Фильтры"
+          @click="filterOpen = true"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+          </svg>
+          <span v-if="hasFilters" class="filter-dot" aria-hidden="true"></span>
         </button>
       </template>
     </ScreenshotFrame>
@@ -554,8 +556,8 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 64px;
-  height: 64px;
+  width: var(--frame-btn-size);
+  height: var(--frame-btn-size);
   padding: 0;
   border: 1px solid var(--overlay-divider);
   border-radius: 50%;
@@ -572,8 +574,8 @@ onBeforeUnmount(() => {
 }
 
 .overlay-icon svg {
-  width: 34px;
-  height: 34px;
+  width: var(--frame-btn-icon);
+  height: var(--frame-btn-icon);
 }
 
 .filter-btn {
@@ -603,15 +605,11 @@ onBeforeUnmount(() => {
 }
 
 .slider-btn {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 4;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 64px;
-  height: 64px;
+  width: var(--frame-btn-size);
+  height: var(--frame-btn-size);
   padding: 0;
   border: 1px solid var(--overlay-divider);
   border-radius: 50%;
@@ -633,16 +631,8 @@ onBeforeUnmount(() => {
 }
 
 .slider-btn svg {
-  width: 34px;
-  height: 34px;
-}
-
-.slider-btn.prev {
-  left: 0.75rem;
-}
-
-.slider-btn.next {
-  right: 0.75rem;
+  width: var(--frame-btn-icon);
+  height: var(--frame-btn-icon);
 }
 
 .toast {
@@ -667,14 +657,6 @@ onBeforeUnmount(() => {
   .stage-filter {
     top: 1.25rem;
     left: 2rem;
-  }
-
-  .slider-btn.prev {
-    left: 2rem;
-  }
-
-  .slider-btn.next {
-    right: 2rem;
   }
 }
 </style>

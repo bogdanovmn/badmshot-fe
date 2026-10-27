@@ -66,6 +66,11 @@ export interface ScreenshotCard {
   views: number
 }
 
+/**
+ * Карточка ТОПа: приходит из публичного (кэшируемого nginx) ответа без персонального `liked`.
+ */
+export type TopScreenshotCard = Omit<ScreenshotCard, 'liked'>
+
 export interface ScreenshotComment {
   id: string
   screenshotId: string
@@ -423,8 +428,8 @@ function appendQuery(url: string, params: ScreenshotFilter): string {
   return query ? `${url}?${query}` : url
 }
 
-export async function getTopScreenshots(): Promise<ScreenshotCard[]> {
-  return makeApiRequest<ScreenshotCard[]>('get', '/screenshots/top')
+export async function getTopScreenshots(): Promise<TopScreenshotCard[]> {
+  return makeApiRequest<TopScreenshotCard[]>('get', '/screenshots/top')
 }
 
 export async function getLikedScreenshots(): Promise<ScreenshotCard[]> {

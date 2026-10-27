@@ -319,6 +319,14 @@ export interface ArchiveStats {
   players: CatalogStat[]
 }
 
+export interface SiteActivityStats {
+  users: number
+  likes: number
+  shares: number
+  views: number
+  comments: number
+}
+
 export interface JobResponse {
   id: string
   type: string
@@ -647,6 +655,10 @@ export async function renamePlayerEverywhere(id: string, name: string): Promise<
 
 export async function getArchiveStats(type: ArchiveType = 'GAMES'): Promise<ArchiveStats> {
   return authApi.get<ArchiveStats>('/stats/archive', { type })
+}
+
+export async function getSiteActivityStats(): Promise<SiteActivityStats> {
+  return authApi.get<SiteActivityStats>('/stats/activity')
 }
 
 export async function getIndexJob(): Promise<JobResponse | null> {

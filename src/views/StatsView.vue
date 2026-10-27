@@ -33,7 +33,7 @@
     <template v-if="activeTab === 'archive'">
       <ErrorNotice v-if="archiveError" :message="archiveError" />
       <div v-else-if="archiveLoading" class="loading">Загрузка...</div>
-      <section v-else-if="archiveTotals" class="archive-panel">
+      <section v-else-if="archiveTotals && activityStats" class="archive-panel">
         <h2>Архив</h2>
         <div class="summary">
           <div class="card">
@@ -58,28 +58,30 @@
           </div>
         </div>
 
-        <div class="breakdown">
-          <div class="breakdown-row">
-            <span class="breakdown-label">Игры</span>
-            <span class="breakdown-value">
-              {{ archiveTotals.games.matches }} матчей ·
-              {{ formatDurationHuman(archiveTotals.games.durationSeconds) }} ·
-              {{ formatBytesHuman(archiveTotals.games.sizeMbytes) }} ·
-              {{ archiveTotals.games.screenshotCount }} кадров
-            </span>
+        <h3 class="subheading">Активность на сайте</h3>
+        <div class="summary">
+          <div class="card">
+            <span class="value">{{ formatCount(activityStats.users) }}</span>
+            <span class="caption">пользователей</span>
           </div>
-          <div class="breakdown-row">
-            <span class="breakdown-label">Индивидуальные тренировки</span>
-            <span class="breakdown-value">
-              {{ archiveTotals.indi.matches }} тренировок ·
-              {{ formatDurationHuman(archiveTotals.indi.durationSeconds) }} ·
-              {{ formatBytesHuman(archiveTotals.indi.sizeMbytes) }} ·
-              {{ archiveTotals.indi.screenshotCount }} кадров
-            </span>
+          <div class="card">
+            <span class="value">{{ formatCount(activityStats.likes) }}</span>
+            <span class="caption">лайков</span>
+          </div>
+          <div class="card">
+            <span class="value">{{ formatCount(activityStats.shares) }}</span>
+            <span class="caption">шарингов</span>
+          </div>
+          <div class="card">
+            <span class="value">{{ formatCount(activityStats.views) }}</span>
+            <span class="caption">просмотров</span>
+          </div>
+          <div class="card">
+            <span class="value">{{ formatCount(activityStats.comments) }}</span>
+            <span class="caption">комментариев</span>
           </div>
         </div>
 
-        <p class="note">Учитываются только валидные файлы архива.</p>
         <router-link v-if="auth.isAdmin" class="detail-link" to="/archive/stats">
           Подробная статистика по годам, клубам и игрокам
         </router-link>
@@ -132,8 +134,14 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { getArchiveStats, getClubTags, getErrorMessage, getPlayerTags } from '@/api'
-import type { ArchiveStats, ArchiveType, CatalogTag } from '@/api'
+import {
+  getArchiveStats,
+  getClubTags,
+  getErrorMessage,
+  getPlayerTags,
+  getSiteActivityStats
+} from '@/api'
+import type { ArchiveStats, ArchiveType, CatalogTag, SiteActivityStats } from '@/api'
 import ErrorNotice from '@/components/ErrorNotice.vue'
 import TagCloud from '@/components/TagCloud.vue'
 import { formatBytesHuman, formatDurationHuman } from '@/common'
@@ -142,8 +150,6 @@ import { authStore } from '@/stores/auth'
 type StatsTab = 'players' | 'clubs' | 'indi' | 'archive'
 
 interface ArchiveTotals {
-  games: ArchiveStats
-  indi: ArchiveStats
   matches: number
   trainings: number
   durationSeconds: number
@@ -168,8 +174,13 @@ const indiTags = ref<CatalogTag[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
 const archiveStats = ref<{ games: ArchiveStats; indi: ArchiveStats } | null>(null)
+const activityStats = ref<SiteActivityStats | null>(null)
 const archiveLoading = ref(false)
 const archiveError = ref<string | null>(null)
+
+function formatCount(value: number): string {
+  return value.toLocaleString('ru-RU')
+}
 
 const archiveTotals = computed<ArchiveTotals | null>(() => {
   if (!archiveStats.value) {
@@ -178,8 +189,6 @@ const archiveTotals = computed<ArchiveTotals | null>(() => {
   const games = archiveStats.value.games
   const indi = archiveStats.value.indi
   return {
-    games,
-    indi,
     matches: games.matches,
     trainings: indi.matches,
     durationSeconds: games.durationSeconds + indi.durationSeconds,
@@ -218,11 +227,13 @@ async function loadArchive() {
   archiveLoading.value = true
   archiveError.value = null
   try {
-    const [games, indi] = await Promise.all([
+    const [games, indi, activity] = await Promise.all([
       getArchiveStats('GAMES'),
-      getArchiveStats('INDI')
+      getArchiveStats('INDI'),
+      getSiteActivityStats()
     ])
     archiveStats.value = { games, indi }
+    activityStats.value = activity
   } catch (e) {
     archiveError.value = getErrorMessage(e, 'Не удалось загрузить статистику архива')
   } finally {
@@ -365,40 +376,11 @@ onMounted(() => {
   text-align: center;
 }
 
-.breakdown {
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-  padding-top: 0.25rem;
-}
-
-.breakdown-row {
-  display: flex;
-  gap: 0.75rem;
-  align-items: baseline;
-  padding-bottom: 0.45rem;
-  border-bottom: 1px solid var(--color-row-border);
-  font-size: 0.9rem;
-}
-
-.breakdown-row:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
-}
-
-.breakdown-label {
-  flex: 0 0 auto;
-  color: var(--color-muted);
-  font-size: 0.8rem;
-}
-
-.breakdown-value {
-  color: var(--color-text);
-}
-
-.note {
-  color: var(--color-muted);
-  font-size: 0.8rem;
+.subheading {
+  margin-top: 0.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-row-border);
+  font-size: 1rem;
 }
 
 .detail-link {
@@ -422,12 +404,5 @@ onMounted(() => {
 .empty {
   border: 1px dashed var(--color-border);
   border-radius: 8px;
-}
-
-@media (max-width: 620px) {
-  .breakdown-row {
-    flex-direction: column;
-    gap: 0.15rem;
-  }
 }
 </style>

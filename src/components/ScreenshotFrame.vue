@@ -426,11 +426,6 @@ function releaseObjectUrl() {
   }
 }
 
-const aspectStyle = computed<CSSProperties>(() => ({
-  aspectRatio: `${props.card.width} / ${props.card.height}`,
-  '--frame-ratio': `${props.card.width / Math.max(1, props.card.height)}`
-} as CSSProperties))
-
 /*
  * Компактный режим: маленький экран в портретной ориентации.
  * Кадр должен целиком поместиться над строкой кнопок, поэтому его размер
@@ -446,6 +441,26 @@ const boxEl = ref<HTMLElement | null>(null)
 const topbarEl = ref<HTMLElement | null>(null)
 const boxSize = ref<{ width: number; height: number } | null>(null)
 const navShift = ref(0)
+
+/*
+ * В компактном режиме кадр обрезается по краям, чтобы он занимал больше
+ * высоты при той же ширине. Картинка лежит с object-fit: cover и сама
+ * подрезает равные доли слева и справа.
+ */
+const COMPACT_SIDE_CROP = 0.15
+
+const frameRatio = computed(() => {
+  const width = Math.max(1, props.card.width)
+  const height = Math.max(1, props.card.height)
+  return compact.value
+    ? (width * (1 - COMPACT_SIDE_CROP * 2)) / height
+    : width / height
+})
+
+const aspectStyle = computed<CSSProperties>(() => ({
+  aspectRatio: `${frameRatio.value}`,
+  '--frame-ratio': `${frameRatio.value}`
+} as CSSProperties))
 
 const boxStyle = computed<CSSProperties>(() => {
   const size = boxSize.value
@@ -484,7 +499,7 @@ function measureBox(): void {
   if (stageWidth <= 0 || availableHeight <= 0) {
     return
   }
-  const ratio = props.card.width / Math.max(1, props.card.height)
+  const ratio = frameRatio.value
   let width = stageWidth
   let height = width / ratio
   if (height > availableHeight) {

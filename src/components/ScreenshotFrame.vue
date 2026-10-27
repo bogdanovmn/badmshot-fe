@@ -1,5 +1,8 @@
 <template>
-  <figure class="frame" :class="{ 'frame--full': full, 'frame--admin': auth.isAdmin }">
+  <figure
+    class="frame"
+    :class="{ 'frame--full': full, 'frame--fit': isFit, 'frame--admin': auth.isAdmin }"
+  >
     <div
       class="image-wrap"
       :class="{ 'effect-halftone': halftone, 'effect-blur': blur }"
@@ -28,6 +31,28 @@
 
       <div v-if="blur" class="fx-vignette" aria-hidden="true"></div>
       <div v-if="showMeta" class="bottom-scrim" aria-hidden="true"></div>
+
+      <button
+        v-if="full"
+        class="action-btn fit-btn"
+        type="button"
+        :title="isFit ? 'Заполнить экран' : 'Показать кадр целиком'"
+        :aria-label="isFit ? 'Заполнить экран' : 'Показать кадр целиком'"
+        @click="toggleFit"
+      >
+        <svg v-if="isFit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 3 21 3 21 9" />
+          <polyline points="9 21 3 21 3 15" />
+          <line x1="21" y1="3" x2="14" y2="10" />
+          <line x1="3" y1="21" x2="10" y2="14" />
+        </svg>
+        <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="4 14 10 14 10 20" />
+          <polyline points="20 10 14 10 14 4" />
+          <line x1="14" y1="10" x2="21" y2="3" />
+          <line x1="3" y1="21" x2="10" y2="14" />
+        </svg>
+      </button>
 
       <div v-if="canConfigure || auth.isAdmin" class="fx-dock">
         <router-link
@@ -298,6 +323,41 @@ const emit = defineEmits<{ 'toggle-like': [] }>()
 
 const auth = authStore()
 const settingsStore = frameEffectsStore()
+
+type FrameFit = 'fit' | 'fill'
+
+const FIT_STORAGE_KEY = 'badmshot.frameFit'
+const portraitMedia = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+  ? window.matchMedia('(orientation: portrait)')
+  : null
+
+function readFitPreference(): FrameFit | null {
+  try {
+    const value = window.localStorage.getItem(FIT_STORAGE_KEY)
+    return value === 'fit' || value === 'fill' ? value : null
+  } catch {
+    return null
+  }
+}
+
+const fitPreference = ref<FrameFit | null>(readFitPreference())
+const portrait = ref(portraitMedia?.matches ?? false)
+const frameFit = computed<FrameFit>(() => fitPreference.value ?? (portrait.value ? 'fit' : 'fill'))
+const isFit = computed(() => props.full && frameFit.value === 'fit')
+
+function toggleFit() {
+  const next: FrameFit = isFit.value ? 'fill' : 'fit'
+  fitPreference.value = next
+  try {
+    window.localStorage.setItem(FIT_STORAGE_KEY, next)
+  } catch {
+    // Приватный режим или заблокированное хранилище — выбор просто не запомнится.
+  }
+}
+
+function onOrientationChange(event: MediaQueryListEvent) {
+  portrait.value = event.matches
+}
 
 const loaded = ref(false)
 const effectsOpen = ref(false)
@@ -1008,6 +1068,10 @@ watch(
 
 onMounted(() => {
   auth.update()
+  if (props.full && portraitMedia) {
+    portrait.value = portraitMedia.matches
+    portraitMedia.addEventListener('change', onOrientationChange)
+  }
   applySettings(settingsStore.settings)
   if (pixelEffectsActive()) {
     schedulePixelRender()
@@ -1020,6 +1084,9 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  if (portraitMedia) {
+    portraitMedia.removeEventListener('change', onOrientationChange)
+  }
   if (renderTimer) {
     clearTimeout(renderTimer)
   }
@@ -1078,6 +1145,14 @@ onBeforeUnmount(() => {
 .frame--full .image-wrap img,
 .frame--full .fx-pixel {
   object-fit: cover;
+}
+
+/* В режиме «вписать» показываем кадр целиком: горизонтальные кадры
+   на вертикальных экранах больше не обрезаются по бокам. */
+.frame--full.frame--fit .image-wrap img,
+.frame--full.frame--fit .fx-pixel {
+  object-fit: contain;
+  object-position: center;
 }
 
 .fx-pixel {
@@ -1391,6 +1466,16 @@ onBeforeUnmount(() => {
   height: 34px;
 }
 
+/* Переключатель «вписать / заполнить» — по центру сверху, чтобы не теснить
+   подпись и социальные кнопки в нижней части кадра. */
+.fit-btn {
+  position: absolute;
+  top: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+}
+
 .action-badge {
   position: absolute;
   top: -2px;
@@ -1422,6 +1507,10 @@ onBeforeUnmount(() => {
   .frame--full .frame-actions {
     right: 2.5rem;
     bottom: 2rem;
+  }
+
+  .fit-btn {
+    top: 1.25rem;
   }
 
   .fx-dock {

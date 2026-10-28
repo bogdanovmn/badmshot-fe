@@ -6,10 +6,14 @@
             игроком.
         </p>
 
-        <div v-if="letters.length" class="letter-filter" role="group" aria-label="Фильтр по первой букве">
+        <div class="letter-filter" role="group" aria-label="Фильтр по первой букве">
             <button v-for="letter in letters" :key="letter" type="button" class="letter-btn"
                 :class="{ active: selectedLetter === letter }" @click="selectLetter(letter)">
                 {{ letter }}
+            </button>
+            <button type="button" class="letter-btn" :class="{ active: selectedLetter === NO_GAMES }"
+                @click="selectLetter(NO_GAMES)">
+                Без игр
             </button>
         </div>
 
@@ -84,7 +88,14 @@
 
 <script setup lang="ts">
     import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
-    import { getErrorMessage, getPlayerLetters, getPlayers, getPlayersByLetter, updatePlayer } from '@/api'
+    import {
+        getErrorMessage,
+        getPlayerLetters,
+        getPlayers,
+        getPlayersByLetter,
+        getPlayersWithoutGames,
+        updatePlayer
+    } from '@/api'
     import type { Player, PlayerAlias, PlayerRenameResult } from '@/api'
     import ErrorNotice from '@/components/ErrorNotice.vue'
     import PlayerRenameDialog from '@/components/PlayerRenameDialog.vue'
@@ -95,6 +106,8 @@
         displayName: string
         alias: PlayerAlias | null
     }
+
+    const NO_GAMES = '__no_games__'
 
     const letters = ref < string[] > ([])
     const selectedLetter = ref < string | null > (null)
@@ -125,12 +138,17 @@
         try {
             const foundLetters = await getPlayerLetters()
             letters.value = [...foundLetters].sort((left, right) => left.localeCompare(right, 'ru'))
-            if (!selectedLetter.value || !letters.value.includes(selectedLetter.value)) {
-                selectedLetter.value = letters.value[0] ?? null
+            const knownFilter = selectedLetter.value === NO_GAMES || (
+                selectedLetter.value !== null && letters.value.includes(selectedLetter.value)
+            )
+            if (!knownFilter) {
+                selectedLetter.value = letters.value[0] ?? NO_GAMES
             }
-            players.value = selectedLetter.value
-                ? await getPlayersByLetter(selectedLetter.value)
-                : []
+            players.value = selectedLetter.value === NO_GAMES
+                ? await getPlayersWithoutGames()
+                : selectedLetter.value
+                    ? await getPlayersByLetter(selectedLetter.value)
+                    : []
             Object.keys(edits).forEach(key => delete edits[key])
             Object.keys(aliasTerms).forEach(key => delete aliasTerms[key])
             players.value.forEach(player => {
@@ -172,11 +190,15 @@
         savedId.value = null
         error.value = null
         try {
+            const displayName = edit.displayName.trim() || null
             await updatePlayer(player.id, {
-                displayName: edit.displayName || null,
+                displayName,
                 aliasPlayerId: edit.alias?.id ?? null
             })
-            await load()
+            player.displayName = displayName
+            player.alias = edit.alias ? { ...edit.alias } : null
+            player.displayLabel = displayName ?? player.name
+            edit.displayName = displayName ?? ''
             savedId.value = player.id
         } catch (e) {
             error.value = getErrorMessage(e, 'Не удалось сохранить игрока')

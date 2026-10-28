@@ -3,7 +3,7 @@
     <nav ref="navRef" class="navbar">
       <div class="nav-left">
         <button
-          v-if="auth.isAuthenticated"
+          v-if="navItems.length"
           class="icon-btn menu-toggle"
           :title="menuOpen ? 'Закрыть меню' : 'Меню'"
           :aria-label="menuOpen ? 'Закрыть меню' : 'Меню'"
@@ -29,19 +29,19 @@
         </router-link>
       </div>
       <div class="nav-actions">
+        <div class="nav-icons">
+          <router-link
+            v-for="item in navItems"
+            :key="item.to"
+            :to="item.to"
+            class="nav-icon-link"
+            :title="item.label"
+            :aria-label="item.label"
+          >
+            <NavIcon :name="item.icon" />
+          </router-link>
+        </div>
         <template v-if="auth.isAuthenticated">
-          <div class="nav-icons">
-            <router-link
-              v-for="item in navItems"
-              :key="item.to"
-              :to="item.to"
-              class="nav-icon-link"
-              :title="item.label"
-              :aria-label="item.label"
-            >
-              <NavIcon :name="item.icon" />
-            </router-link>
-          </div>
           <router-link v-if="auth.userName" to="/profile" class="user-name full" title="Профиль">{{ auth.userName }}</router-link>
           <router-link v-if="auth.userName" to="/profile" class="user-name short" title="Профиль">{{ initials(auth.userName) }}</router-link>
           <button class="icon-btn" title="Выйти" aria-label="Выйти" @click="handleLogout">
@@ -66,12 +66,6 @@
     <main class="content" :class="{ 'content--immersive': immersive }">
       <router-view />
     </main>
-    <footer v-if="!immersive" class="footer">
-      <div class="footer-links">
-        <router-link to="/faq">FAQ</router-link>
-      </div>
-      <span class="footer-version">версия: {{ backendVersion || '—' }} / {{ frontendVersion }}</span>
-    </footer>
   </div>
 </template>
 
@@ -81,11 +75,10 @@ import { useRoute, useRouter } from 'vue-router'
 import { authStore } from '@/stores/auth'
 import { frameEffectsStore } from '@/stores/frameEffects'
 import { logout } from '@/logout'
-import { getBackendVersion } from '@/api'
 import { SsoService } from '@bogdanovmn/ssofw'
 import NavIcon from '@/components/NavIcon.vue'
 
-type NavIconName = 'top' | 'stats' | 'explore' | 'liked' | 'archive' | 'comments'
+type NavIconName = 'top' | 'stats' | 'explore' | 'liked' | 'archive' | 'comments' | 'faq'
 
 interface NavItem {
   to: string
@@ -99,22 +92,24 @@ const auth = authStore()
 const frameEffects = frameEffectsStore()
 const immersive = computed(() => route.meta.immersive === true)
 const ssoService = inject<SsoService>('ssoService')!
-const backendVersion = ref<string | null>(null)
-const frontendVersion = import.meta.env.FRONTEND_VERSION
 const menuOpen = ref(false)
 const navRef = ref<HTMLElement | null>(null)
 
 const navItems = computed<NavItem[]>(() => {
-  const items: NavItem[] = [
-    { to: '/top', label: 'ТОП', icon: 'top' },
-    { to: '/comments', label: 'Последние комментарии', icon: 'comments' },
-    { to: '/stats', label: 'Статистика', icon: 'stats' },
-    { to: '/explore', label: 'Кадры', icon: 'explore' },
-    { to: '/liked', label: 'Любимые', icon: 'liked' },
-  ]
-  if (auth.isAdmin) {
-    items.push({ to: '/archive', label: 'Архив', icon: 'archive' })
+  const items: NavItem[] = []
+  if (auth.isAuthenticated) {
+    items.push(
+      { to: '/top', label: 'ТОП', icon: 'top' },
+      { to: '/comments', label: 'Последние комментарии', icon: 'comments' },
+      { to: '/stats', label: 'Статистика', icon: 'stats' },
+      { to: '/explore', label: 'Кадры', icon: 'explore' },
+      { to: '/liked', label: 'Любимые', icon: 'liked' },
+    )
+    if (auth.isAdmin) {
+      items.push({ to: '/archive', label: 'Архив', icon: 'archive' })
+    }
   }
+  items.push({ to: '/faq', label: 'FAQ', icon: 'faq' })
   return items
 })
 
@@ -155,7 +150,6 @@ function onKeydown(event: KeyboardEvent) {
 
 onMounted(() => {
   auth.update()
-  loadBackendVersion()
   void frameEffects.ensureLoaded()
   document.addEventListener('click', onDocumentClick)
   document.addEventListener('keydown', onKeydown)
@@ -165,15 +159,6 @@ onBeforeUnmount(() => {
   document.removeEventListener('click', onDocumentClick)
   document.removeEventListener('keydown', onKeydown)
 })
-
-async function loadBackendVersion() {
-  try {
-    const data = await getBackendVersion()
-    backendVersion.value = data.version
-  } catch {
-    backendVersion.value = null
-  }
-}
 
 function handleLogin() {
   router.push('/login')
@@ -365,33 +350,6 @@ async function handleLogout() {
   flex: 1;
   min-width: 0;
   min-height: 0;
-}
-
-.footer {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.25rem;
-  margin-top: 2rem;
-  padding: 0.75rem 1rem;
-  border-top: 1px solid var(--color-border);
-  font-size: 0.85rem;
-  color: var(--color-muted);
-}
-
-.footer-links a {
-  color: var(--color-muted);
-  text-decoration: none;
-}
-
-.footer-links a:hover {
-  color: var(--text-primary);
-  text-decoration: underline;
-}
-
-.footer-version {
-  font-size: 0.8rem;
-  opacity: 0.65;
 }
 
 @media (max-width: 479px) {

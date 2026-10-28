@@ -40,6 +40,11 @@
       <line x1="8" y1="9" x2="16" y2="9" />
       <line x1="8" y1="13" x2="13" y2="13" />
     </template>
+    <template v-else-if="name === 'faq'">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+    </template>
     <template v-else-if="name === 'share'">
       <circle cx="18" cy="5" r="3" />
       <circle cx="6" cy="12" r="3" />
@@ -63,7 +68,7 @@
 </template>
 
 <script setup lang="ts">
-type NavIconName = 'top' | 'stats' | 'explore' | 'liked' | 'archive' | 'comments' | 'share' | 'filters' | 'menu' | 'close'
+type NavIconName = 'top' | 'stats' | 'explore' | 'liked' | 'archive' | 'comments' | 'faq' | 'share' | 'filters' | 'menu' | 'close'
 
 defineProps<{ name: NavIconName }>()
 </script>

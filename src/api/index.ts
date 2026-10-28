@@ -536,6 +536,10 @@ export async function getPlayersByLetter(letter: string): Promise<Player[]> {
   return makeApiRequest<Player[]>('get', '/filters/players', { letter })
 }
 
+export async function getPlayersWithoutGames(): Promise<Player[]> {
+  return makeApiRequest<Player[]>('get', '/filters/players/no-games')
+}
+
 export async function getPlayersByIds(ids: string[]): Promise<Player[]> {
   if (ids.length === 0) {
     return []
@@ -556,8 +560,11 @@ function appendValues(url: string, key: string, values: string[]): string {
   return `${url}?${search.toString()}`
 }
 
-export async function getPlayerTags(type: ArchiveType = 'GAMES'): Promise<CatalogTag[]> {
-  return makeApiRequest<CatalogTag[]>('get', '/tags/players', { type })
+export async function getPlayerTags(
+  type: ArchiveType = 'GAMES',
+  withDisplayName = false
+): Promise<CatalogTag[]> {
+  return makeApiRequest<CatalogTag[]>('get', '/tags/players', { type, withDisplayName })
 }
 
 export async function getClubTags(type: ArchiveType = 'GAMES'): Promise<CatalogTag[]> {

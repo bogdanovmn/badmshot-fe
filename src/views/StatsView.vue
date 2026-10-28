@@ -6,6 +6,9 @@
         <template v-if="activeTab === 'archive'">
           Сводная статистика по всему архиву: матчи, тренировки, время, размер и кадры.
         </template>
+        <template v-else-if="activeTab === 'service'">
+          Активность на сайте: пользователи, лайки, шаринги, просмотры и комментарии.
+        </template>
         <template v-else>
           Чем больше у тэга матчей, тем крупнее и ярче он выглядит.
           Наведите на тэг, чтобы увидеть точное количество.
@@ -30,11 +33,11 @@
       </button>
     </div>
 
-    <template v-if="activeTab === 'archive'">
+    <template v-if="activeTab === 'archive' || activeTab === 'service'">
       <ErrorNotice v-if="archiveError" :message="archiveError" />
       <div v-else-if="archiveLoading" class="loading">Загрузка...</div>
-      <section v-else-if="archiveTotals && activityStats" class="archive-panel">
-        <h2>Архив</h2>
+
+      <section v-else-if="activeTab === 'archive' && archiveTotals" class="stats-panel">
         <div class="summary">
           <div class="card">
             <span class="value">{{ archiveTotals.matches }}</span>
@@ -45,11 +48,11 @@
             <span class="caption">тренировок</span>
           </div>
           <div class="card">
-            <span class="value">{{ formatDurationHuman(archiveTotals.durationSeconds) }}</span>
+            <span class="value">{{ formatHours(archiveTotals.durationSeconds) }}</span>
             <span class="caption">общее время</span>
           </div>
           <div class="card">
-            <span class="value">{{ formatBytesHuman(archiveTotals.sizeMbytes) }}</span>
+            <span class="value">{{ formatGigabytes(archiveTotals.sizeMbytes) }}</span>
             <span class="caption">размер архива</span>
           </div>
           <div class="card">
@@ -58,7 +61,12 @@
           </div>
         </div>
 
-        <h3 class="subheading">Активность на сайте</h3>
+        <router-link v-if="auth.isAdmin" class="detail-link" to="/archive/stats">
+          Подробная статистика по годам, клубам и игрокам
+        </router-link>
+      </section>
+
+      <section v-else-if="activeTab === 'service' && activityStats" class="stats-panel">
         <div class="summary">
           <div class="card">
             <span class="value">{{ formatCount(activityStats.users) }}</span>
@@ -81,10 +89,6 @@
             <span class="caption">комментариев</span>
           </div>
         </div>
-
-        <router-link v-if="auth.isAdmin" class="detail-link" to="/archive/stats">
-          Подробная статистика по годам, клубам и игрокам
-        </router-link>
       </section>
     </template>
 
@@ -93,7 +97,6 @@
       <div v-else-if="loading" class="loading">Загрузка...</div>
 
       <section v-else-if="activeTab === 'players'" class="cloud-section">
-        <h2>Игроки</h2>
         <TagCloud
           v-if="playerTags.length"
           :tags="playerTags"
@@ -104,8 +107,7 @@
         <div v-else class="empty">Тэги не найдены.</div>
       </section>
 
-      <section v-else-if="activeTab === 'clubs'" class="cloud-section">
-        <h2>Клубы</h2>
+      <section v-else-if="activeTab === 'clubs'" class="cloud-section cloud-section--narrow">
         <TagCloud
           v-if="clubTags.length"
           :tags="clubTags"
@@ -116,8 +118,7 @@
         <div v-else class="empty">Тэги не найдены.</div>
       </section>
 
-      <section v-else-if="activeTab === 'indi'" class="cloud-section">
-        <h2>Индивидуальные тренировки</h2>
+      <section v-else-if="activeTab === 'indi'" class="cloud-section cloud-section--narrow">
         <TagCloud
           v-if="indiTags.length"
           :tags="indiTags"
@@ -144,10 +145,9 @@ import {
 import type { ArchiveStats, ArchiveType, CatalogTag, SiteActivityStats } from '@/api'
 import ErrorNotice from '@/components/ErrorNotice.vue'
 import TagCloud from '@/components/TagCloud.vue'
-import { formatBytesHuman, formatDurationHuman } from '@/common'
 import { authStore } from '@/stores/auth'
 
-type StatsTab = 'players' | 'clubs' | 'indi' | 'archive'
+type StatsTab = 'players' | 'clubs' | 'indi' | 'archive' | 'service'
 
 interface ArchiveTotals {
   matches: number
@@ -164,7 +164,8 @@ const tabs: { key: StatsTab; label: string }[] = [
   { key: 'players', label: 'Игроки' },
   { key: 'clubs', label: 'Клубы' },
   { key: 'indi', label: 'Индивидуальные тренировки' },
-  { key: 'archive', label: 'Архив' }
+  { key: 'archive', label: 'Архив' },
+  { key: 'service', label: 'Сервис' }
 ]
 
 const activeTab = ref<StatsTab>('players')
@@ -180,6 +181,14 @@ const archiveError = ref<string | null>(null)
 
 function formatCount(value: number): string {
   return value.toLocaleString('ru-RU')
+}
+
+function formatGigabytes(mbytes: number): string {
+  return `${Math.round(mbytes / 1024).toLocaleString('ru-RU')} ГБ`
+}
+
+function formatHours(seconds: number): string {
+  return `${Math.round(seconds / 3600).toLocaleString('ru-RU')} ч`
 }
 
 const archiveTotals = computed<ArchiveTotals | null>(() => {
@@ -206,7 +215,7 @@ async function loadClouds() {
   error.value = null
   try {
     const [players, clubs, indi] = await Promise.all([
-      getPlayerTags('GAMES'),
+      getPlayerTags('GAMES', true),
       getClubTags('GAMES'),
       getPlayerTags('INDI')
     ])
@@ -246,7 +255,7 @@ function selectTab(tab: StatsTab) {
     return
   }
   activeTab.value = tab
-  if (tab === 'archive') {
+  if (tab === 'archive' || tab === 'service') {
     void loadArchive()
   }
 }
@@ -319,32 +328,22 @@ onMounted(() => {
   color: var(--color-on-primary);
 }
 
-.cloud-section {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  padding: 1rem 1.25rem 1.5rem;
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  background: var(--color-surface);
-}
-
-.cloud-section h2 {
-  font-size: 1.1rem;
-}
-
-.archive-panel {
+.cloud-section,
+.stats-panel {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  padding: 1rem 1.25rem 1.5rem;
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  background: var(--color-surface);
 }
 
-.archive-panel h2 {
-  font-size: 1.1rem;
+.cloud-section--narrow {
+  width: 75%;
+  margin: 0 auto;
+}
+
+@media (max-width: 600px) {
+  .cloud-section--narrow {
+    width: 100%;
+  }
 }
 
 .summary {
@@ -374,13 +373,6 @@ onMounted(() => {
   color: var(--color-muted);
   font-size: 0.8rem;
   text-align: center;
-}
-
-.subheading {
-  margin-top: 0.5rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--color-row-border);
-  font-size: 1rem;
 }
 
 .detail-link {

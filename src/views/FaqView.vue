@@ -6,6 +6,7 @@
                 Короткие ответы о том, как устроен Badm Shot: просмотр кадров, фильтры,
                 лайки, комментарии, ссылки и работа с архивом.
             </p>
+            <p class="version">Версия приложения: {{ backendVersion || '—' }} / {{ frontendVersion || '—' }}</p>
         </header>
 
         <section class="faq-list">
@@ -26,11 +27,26 @@
 </template>
 
 <script setup lang="ts">
+    import { onMounted, ref } from 'vue'
+    import { getBackendVersion } from '@/api'
+
     interface FaqItem {
         question: string
         paragraphs: string[]
         points?: string[]
     }
+
+    const backendVersion = ref < string | null > (null)
+    const frontendVersion = import.meta.env.FRONTEND_VERSION
+
+    onMounted(async () => {
+        try {
+            const data = await getBackendVersion()
+            backendVersion.value = data.version
+        } catch {
+            backendVersion.value = null
+        }
+    })
 
     const items: FaqItem[] = [
         {
@@ -156,6 +172,11 @@
         color: var(--text-secondary);
         font-size: 0.92rem;
         line-height: 1.5;
+    }
+
+    .faq-head .version {
+        color: var(--color-muted);
+        font-size: 0.8rem;
     }
 
     .faq-list {

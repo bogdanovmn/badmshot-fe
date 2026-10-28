@@ -10,7 +10,7 @@
     <div
       ref="stageEl"
       class="image-wrap"
-      :class="{ 'effect-halftone': halftone, 'effect-blur': blur }"
+      :class="{ 'effect-halftone': halftoneActive, 'effect-blur': blurActive }"
     >
       <div ref="boxEl" class="frame-box" :style="[aspectStyle, boxStyle, effectStyle]">
         <div v-if="!loaded" class="placeholder">Загрузка кадра...</div>
@@ -32,10 +32,10 @@
           aria-hidden="true"
         ></canvas>
 
-        <div v-if="halftone" class="fx-halftone" aria-hidden="true"></div>
+        <div v-if="halftoneActive" class="fx-halftone" aria-hidden="true"></div>
 
-        <div v-if="blur" class="fx-vignette" aria-hidden="true"></div>
-        <div v-if="showMeta" class="bottom-scrim" aria-hidden="true"></div>
+        <div v-if="blurActive" class="fx-vignette" aria-hidden="true"></div>
+        <div v-if="showMeta && !compact" class="bottom-scrim" aria-hidden="true"></div>
 
         <div
           v-if="canConfigure && effectsOpen"
@@ -249,13 +249,13 @@
           </button>
         </div>
       </div>
-    </div>
 
-    <div v-if="showMeta" class="caption">
-      <div v-if="card.players.length" class="players">{{ card.players.join(' · ') }}</div>
-      <div class="meta-row">
-        <span v-if="card.matchDate" class="date">{{ formatDate(card.matchDate) }}</span>
-        <span v-if="card.clubName" class="club">{{ card.clubName }}</span>
+      <div v-if="showMeta" ref="captionEl" class="caption">
+        <div v-if="card.players.length" class="players">{{ card.players.join(' · ') }}</div>
+        <div class="meta-row">
+          <span v-if="card.matchDate" class="date">{{ formatDate(card.matchDate) }}</span>
+          <span v-if="card.clubName" class="club">{{ card.clubName }}</span>
+        </div>
       </div>
     </div>
   </figure>
@@ -437,6 +437,7 @@ const compact = ref(false)
 const figureEl = ref<HTMLElement | null>(null)
 const stageEl = ref<HTMLElement | null>(null)
 const barEl = ref<HTMLElement | null>(null)
+const captionEl = ref<HTMLElement | null>(null)
 const boxEl = ref<HTMLElement | null>(null)
 const topbarEl = ref<HTMLElement | null>(null)
 const boxSize = ref<{ width: number; height: number } | null>(null)
@@ -494,8 +495,13 @@ function measureBox(): void {
   const stageWidth = stage.clientWidth
   const stageHeight = stage.clientHeight
   const barHeight = barEl.value ? barEl.value.offsetHeight : 0
-  const gap = barHeight ? Number.parseFloat(getComputedStyle(stage).rowGap) || 0 : 0
-  const availableHeight = Math.max(0, stageHeight - barHeight - gap)
+  const captionHeight = captionEl.value ? captionEl.value.offsetHeight : 0
+  const visibleRows = (barHeight > 0 ? 1 : 0) + (captionHeight > 0 ? 1 : 0)
+  const gap = visibleRows ? Number.parseFloat(getComputedStyle(stage).rowGap) || 0 : 0
+  const availableHeight = Math.max(
+    0,
+    stageHeight - barHeight - captionHeight - gap * visibleRows
+  )
   if (stageWidth <= 0 || availableHeight <= 0) {
     return
   }
@@ -551,6 +557,15 @@ function onCompactQueryChange(event: MediaQueryListEvent): void {
   applyCompact(event.matches)
 }
 
+/*
+ * В компактном режиме (маленький экран, кадр с чёрными полосами) газетная
+ * сетка и кино-размытие не применяются: из-за обрезки по краям они только
+ * мешают восприятию кадра. Настройки при этом сохраняются и продолжают
+ * работать во всех остальных режимах.
+ */
+const halftoneActive = computed(() => halftone.value && !compact.value)
+const blurActive = computed(() => blur.value && !compact.value)
+
 const effectStyle = computed<CSSProperties>(() => {
   const strength = clamp(halftoneStrength.value, 0, 100) / 100
   const step = 3 + strength * 8
@@ -564,14 +579,14 @@ const effectStyle = computed<CSSProperties>(() => {
 
 const imageFilter = computed(() => {
   const parts: string[] = []
-  if (halftone.value) {
+  if (halftoneActive.value) {
     const strength = clamp(halftoneStrength.value, 0, 100) / 100
     parts.push(
       `grayscale(${(0.35 + strength * 0.65).toFixed(2)})`,
       `contrast(${(1 + strength * 0.45).toFixed(2)})`
     )
   }
-  if (blur.value) {
+  if (blurActive.value) {
     const strength = clamp(blurStrength.value, 0, 100) / 100
     parts.push(
       `blur(${(strength * 7).toFixed(2)}px)`,
@@ -1176,6 +1191,9 @@ onMounted(() => {
   if (barEl.value) {
     stageObserver.observe(barEl.value)
   }
+  if (captionEl.value) {
+    stageObserver.observe(captionEl.value)
+  }
   measure()
 })
 
@@ -1265,14 +1283,15 @@ onBeforeUnmount(() => {
 
 /*
  * Компактный режим: маленький экран в портретной ориентации (телефон/планшет).
- * Кадр вписан по центру, сразу под ним — строка кнопок на чёрной полосе,
- * у нижнего края экрана — подпись. Полосы совпадают по цвету с фоном подписи.
+ * Кадр вписан по центру, сразу под ним — строка кнопок, ещё ниже — подпись,
+ * прижатая к левому краю строки кнопок. Всё это центрируется по вертикали,
+ * поэтому подпись никогда не уезжает за пределы экрана.
  * Размер кадра приходит из скрипта (measureBox), чтобы не зависеть от
  * container queries и обрезки. Составной селектор нужен, чтобы перебить
  * более поздние правила обычного режима и медиазапросы.
  */
 .frame--full.frame--compact {
-  padding-bottom: 6.5rem;
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
   background: var(--bg-main);
 }
 
@@ -1295,7 +1314,7 @@ onBeforeUnmount(() => {
   height: calc(var(--frame-btn-icon) * 1.18);
 }
 
-/* Кадр и строка кнопок вместе центрируются по вертикали. */
+/* Кадр, строка кнопок и подпись вместе центрируются по вертикали. */
 .frame--full.frame--compact .image-wrap {
   display: flex;
   flex-direction: column;
@@ -1361,10 +1380,12 @@ onBeforeUnmount(() => {
 }
 
 .frame--full.frame--compact .caption {
-  left: 0.75rem;
-  right: 0.75rem;
-  bottom: 0.5rem;
+  position: static;
+  flex: 0 0 auto;
+  align-self: stretch;
   max-width: none;
+  padding: 0 0.75rem;
+  text-shadow: none;
 }
 
 .image-wrap img,

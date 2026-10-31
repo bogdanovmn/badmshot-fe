@@ -117,6 +117,8 @@ export interface UserFrameFilter {
   playerIds: string[]
   clubIds: string[]
   includeIndi: boolean
+  /** Показывать только кадры, где присутствуют все выбранные игроки. */
+  together: boolean
   updatedAt: string | null
 }
 
@@ -126,6 +128,27 @@ export interface ScreenshotFilter {
   players?: string[]
   clubs?: string[]
   indi?: boolean
+  together?: boolean
+}
+
+export interface FilterOptions {
+  clubs: Club[]
+  /** Есть ли индивидуальные тренировки для выбранных игроков в текущем режиме. */
+  indiAvailable: boolean
+  /** Можно ли включить режим «вместе» для текущего набора игроков. */
+  togetherAvailable: boolean
+  /** Есть ли кадры для текущего набора игроков и типа кадров. */
+  framesAvailable: boolean
+  maxTogetherPlayers: number
+}
+
+export interface PlayersQuery {
+  clubId?: string
+  term?: string
+  players?: string[]
+  together?: boolean
+  indi?: boolean
+  availableOnly?: boolean
 }
 
 export interface FrameRateLimitStatus {
@@ -491,7 +514,7 @@ export async function getDefaultFrameFilter(): Promise<UserFrameFilter> {
 }
 
 export async function saveDefaultFrameFilter(
-  filter: Pick<UserFrameFilter, 'playerIds' | 'clubIds' | 'includeIndi'>
+  filter: Pick<UserFrameFilter, 'playerIds' | 'clubIds' | 'includeIndi' | 'together'>
 ): Promise<UserFrameFilter> {
   return authApi.put<UserFrameFilter>('/profile/filters', filter)
 }
@@ -529,8 +552,48 @@ export async function getClubs(params: { playerId?: string } = {}): Promise<Club
   return makeApiRequest<Club[]>('get', '/filters/clubs', params)
 }
 
-export async function getPlayers(params: { clubId?: string; term?: string } = {}): Promise<Player[]> {
-  return makeApiRequest<Player[]>('get', '/filters/players', params)
+/**
+ * Согласованные опции фильтра для выбранных игроков: клубы и доступность
+ * индивидуальных тренировок. Повторяющиеся параметры массива собираем вручную,
+ * чтобы не зависеть от сериализации axios.
+ */
+export async function getFilterOptions(params: {
+  players?: string[]
+  together?: boolean
+  indi?: boolean
+} = {}): Promise<FilterOptions> {
+  const search = new URLSearchParams()
+  params.players?.forEach(playerId => search.append('players', playerId))
+  if (params.together) {
+    search.append('together', 'true')
+  }
+  if (params.indi) {
+    search.append('indi', 'true')
+  }
+  const query = search.toString()
+  return makeApiRequest<FilterOptions>('get', query ? `/filters/options?${query}` : '/filters/options')
+}
+
+export async function getPlayers(params: PlayersQuery = {}): Promise<Player[]> {
+  const search = new URLSearchParams()
+  if (params.clubId) {
+    search.append('clubId', params.clubId)
+  }
+  if (params.term) {
+    search.append('term', params.term)
+  }
+  params.players?.forEach(playerId => search.append('players', playerId))
+  if (params.together) {
+    search.append('together', 'true')
+  }
+  if (params.indi) {
+    search.append('indi', 'true')
+  }
+  if (params.availableOnly) {
+    search.append('availableOnly', 'true')
+  }
+  const query = search.toString()
+  return makeApiRequest<Player[]>('get', query ? `/filters/players?${query}` : '/filters/players')
 }
 
 export async function getPlayerLetters(unprocessed = false): Promise<PlayerLetterCount[]> {

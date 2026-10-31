@@ -98,6 +98,7 @@
       :players="selectedPlayers"
       :clubs="selectedClubs"
       :include-indi="includeIndi"
+      :together="together"
       @close="filterOpen = false"
       @apply="applyFilters"
     />
@@ -133,6 +134,7 @@ const router = useRouter()
 const selectedPlayers = ref<Player[]>([])
 const selectedClubs = ref<Club[]>([])
 const includeIndi = ref(false)
+const together = ref(false)
 
 const frameRef = ref<InstanceType<typeof ScreenshotFrame> | null>(null)
 const history = ref<ScreenshotCard[]>([])
@@ -180,12 +182,18 @@ function queryFlag(value: unknown): boolean {
   return value === '1' || value === 'true'
 }
 
-function sameSelection(playerIds: string[], clubIds: string[], indi: boolean): boolean {
+function sameSelection(
+  playerIds: string[],
+  clubIds: string[],
+  indi: boolean,
+  allTogether: boolean
+): boolean {
   const currentPlayers = selectedPlayers.value.map(player => player.id).sort()
   const currentClubs = selectedClubs.value.map(club => club.id).sort()
   return currentPlayers.join(',') === [...playerIds].sort().join(',')
     && currentClubs.join(',') === [...clubIds].sort().join(',')
     && includeIndi.value === indi
+    && together.value === allTogether
 }
 
 async function loadSelection(playerIds: string[], clubIds: string[]) {
@@ -213,6 +221,9 @@ async function syncQuery() {
   if (includeIndi.value) {
     query.indi = '1'
   }
+  if (together.value) {
+    query.together = '1'
+  }
   const current = route.query
   const same = JSON.stringify(normalizeQuery(current)) === JSON.stringify(normalizeQuery(query))
   if (!same) {
@@ -224,7 +235,8 @@ function normalizeQuery(query: Record<string, unknown>): Record<string, unknown>
   return {
     players: queryValues(query.players).slice().sort(),
     clubs: queryValues(query.clubs).slice().sort(),
-    indi: queryFlag(query.indi)
+    indi: queryFlag(query.indi),
+    together: queryFlag(query.together)
   }
 }
 
@@ -269,7 +281,8 @@ function filter(): ScreenshotFilter {
   return {
     players: selectedPlayers.value.map(player => player.id),
     clubs: selectedClubs.value.map(club => club.id),
-    indi: includeIndi.value
+    indi: includeIndi.value,
+    together: together.value
   }
 }
 
@@ -376,10 +389,16 @@ async function prev() {
   }
 }
 
-async function applyFilters(value: { players: Player[]; clubs: Club[]; includeIndi: boolean }) {
+async function applyFilters(value: {
+  players: Player[]
+  clubs: Club[]
+  includeIndi: boolean
+  together: boolean
+}) {
   selectedPlayers.value = value.players
   selectedClubs.value = value.clubs
   includeIndi.value = value.includeIndi
+  together.value = value.together
   filterOpen.value = false
   history.value = []
   historyIndex.value = -1
@@ -418,11 +437,13 @@ async function loadDefaultFilter() {
   try {
     const filter = await getDefaultFrameFilter()
     includeIndi.value = filter.includeIndi
+    together.value = filter.together
     if (filter.playerIds.length || filter.clubIds.length) {
       await loadSelection(filter.playerIds, filter.clubIds)
     }
   } catch {
     includeIndi.value = false
+    together.value = false
     selectedPlayers.value = []
     selectedClubs.value = []
   }
@@ -448,10 +469,12 @@ watch(
     const playerIds = queryValues(route.query.players)
     const clubIds = queryValues(route.query.clubs)
     const indi = queryFlag(route.query.indi)
-    if (sameSelection(playerIds, clubIds, indi)) {
+    const allTogether = queryFlag(route.query.together)
+    if (sameSelection(playerIds, clubIds, indi, allTogether)) {
       return
     }
     includeIndi.value = indi
+    together.value = allTogether
     await loadSelection(playerIds, clubIds)
     history.value = []
     historyIndex.value = -1
@@ -476,7 +499,8 @@ onMounted(async () => {
   const playerIds = queryValues(route.query.players)
   const clubIds = queryValues(route.query.clubs)
   includeIndi.value = queryFlag(route.query.indi)
-  if (playerIds.length || clubIds.length || includeIndi.value) {
+  together.value = queryFlag(route.query.together)
+  if (playerIds.length || clubIds.length || includeIndi.value || together.value) {
     await loadSelection(playerIds, clubIds)
   } else {
     await loadDefaultFilter()

@@ -38,6 +38,9 @@
           <span v-for="club in filterClubs" :key="`club-${club.id}`" class="chip">
             {{ club.displayLabel }}
           </span>
+          <span v-if="filterTogether && filterPlayers.length > 1" class="chip">
+            Все игроки вместе
+          </span>
           <span v-if="filterIncludeIndi" class="chip">Индивидуальные тренировки</span>
           <span v-if="!hasDefaultFilter" class="empty-filter">
             Фильтры не заданы — показываются все игры.
@@ -109,6 +112,7 @@
       :players="filterPlayers"
       :clubs="filterClubs"
       :include-indi="filterIncludeIndi"
+      :together="filterTogether"
       @close="filterOpen = false"
       @apply="saveFilter"
     />
@@ -160,6 +164,7 @@ const filterOpen = ref(false)
 const filterPlayers = ref<Player[]>([])
 const filterClubs = ref<Club[]>([])
 const filterIncludeIndi = ref(false)
+const filterTogether = ref(false)
 const filterLoading = ref(true)
 const filterError = ref<string | null>(null)
 
@@ -172,7 +177,10 @@ const commentsLoading = ref(true)
 const commentsError = ref<string | null>(null)
 
 const hasDefaultFilter = computed(() =>
-  filterPlayers.value.length > 0 || filterClubs.value.length > 0 || filterIncludeIndi.value
+  filterPlayers.value.length > 0
+  || filterClubs.value.length > 0
+  || filterIncludeIndi.value
+  || (filterTogether.value && filterPlayers.value.length > 1)
 )
 
 const exploreTo = computed(() => {
@@ -185,6 +193,9 @@ const exploreTo = computed(() => {
   }
   if (filterIncludeIndi.value) {
     query.indi = '1'
+  }
+  if (filterTogether.value && filterPlayers.value.length > 1) {
+    query.together = '1'
   }
   return { path: '/explore', query }
 })
@@ -205,6 +216,7 @@ async function loadFilter() {
     filterPlayers.value = players
     filterClubs.value = clubs
     filterIncludeIndi.value = filter.includeIndi
+    filterTogether.value = filter.together
   } catch (e) {
     filterError.value = getErrorMessage(e, 'Не удалось загрузить фильтры')
   } finally {
@@ -236,7 +248,12 @@ async function loadComments() {
   }
 }
 
-async function saveFilter(value: { players: Player[]; clubs: Club[]; includeIndi: boolean }) {
+async function saveFilter(value: {
+  players: Player[]
+  clubs: Club[]
+  includeIndi: boolean
+  together: boolean
+}) {
   filterOpen.value = false
   filterLoading.value = true
   filterError.value = null
@@ -244,7 +261,8 @@ async function saveFilter(value: { players: Player[]; clubs: Club[]; includeIndi
     await saveDefaultFrameFilter({
       playerIds: value.players.map(player => player.id),
       clubIds: value.clubs.map(club => club.id),
-      includeIndi: value.includeIndi
+      includeIndi: value.includeIndi,
+      together: value.together
     })
     await loadFilter()
   } catch (e) {

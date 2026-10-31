@@ -179,7 +179,7 @@
 
             <p v-if="optionsError" class="notice notice-error" role="alert">
               {{ optionsError }}
-              <button class="link-btn" type="button" @click="refreshOptions()">Повторить</button>
+              <button class="link-btn" type="button" @click="refreshOptions(true)">Повторить</button>
             </p>
 
             <div v-if="selectedClubs.length" class="chips" aria-label="Выбранные клубы">
@@ -289,6 +289,9 @@ const activeOption = ref(-1)
 let playerTimer: ReturnType<typeof setTimeout> | null = null
 let searchVersion = 0
 let optionsVersion = 0
+let lastOptionsKey: string | null = null
+let pendingOptionsKey: string | null = null
+const optionsCache = new Map<string, FilterOptions>()
 let previousActiveElement: Element | null = null
 
 const selectedPlayerIds = computed(() => selectedPlayers.value.map(player => player.id))
@@ -524,25 +527,62 @@ async function searchPlayers() {
   }
 }
 
-async function refreshOptions() {
+/**
+ * При 0–1 выбранных игроках режим «вместе» не меняет выборку,
+ * поэтому в запрос и в ключ кэша он попадает только при 2+ игроках.
+ */
+function effectiveTogether(): boolean {
+  return togetherMode.value && selectedPlayerIds.value.length > 1
+}
+
+function optionsKey(): string {
+  return JSON.stringify([
+    [...selectedPlayerIds.value].sort(),
+    effectiveTogether(),
+    showIndi.value
+  ])
+}
+
+async function refreshOptions(force = false) {
+  const key = optionsKey()
+  if (!force && (key === lastOptionsKey || key === pendingOptionsKey)) {
+    return
+  }
+  if (!force && optionsCache.has(key)) {
+    // Отменяем возможный устаревший ответ и показываем закэшированные опции.
+    optionsVersion++
+    pendingOptionsKey = null
+    const cached = optionsCache.get(key) as FilterOptions
+    options.value = cached
+    lastOptionsKey = key
+    optionsError.value = null
+    optionsLoading.value = false
+    applyOptions(cached)
+    return
+  }
   const version = ++optionsVersion
+  pendingOptionsKey = key
   optionsLoading.value = true
   optionsError.value = null
   try {
     const result = await getFilterOptions({
       players: selectedPlayerIds.value,
-      together: togetherMode.value,
+      together: effectiveTogether(),
       indi: showIndi.value
     })
     if (version !== optionsVersion) {
       return
     }
     options.value = result
+    optionsCache.set(key, result)
+    lastOptionsKey = key
+    pendingOptionsKey = null
     applyOptions(result)
   } catch (e) {
     if (version !== optionsVersion) {
       return
     }
+    pendingOptionsKey = null
     optionsError.value = getErrorMessage(e, 'Не удалось обновить доступные фильтры')
   } finally {
     if (version === optionsVersion) {
@@ -707,6 +747,10 @@ watch(playerTerm, term => {
 })
 
 watch([selectedPlayerIds, togetherMode, showIndi], () => {
+  const key = optionsKey()
+  if (key === lastOptionsKey || key === pendingOptionsKey) {
+    return
+  }
   resetPlayerSearch()
   void refreshOptions()
 })

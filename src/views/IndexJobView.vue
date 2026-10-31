@@ -108,7 +108,7 @@
                 <input v-model.number="options.scalePercent" type="number" min="1" max="100" />
               </label>
               <label class="field">
-                <span>Качество (JPEG/WebP)</span>
+                <span>Качество (JPEG)</span>
                 <input v-model.number="options.quality" type="number" min="1" max="100" />
               </label>
               <label class="field">
@@ -125,7 +125,6 @@
               <label class="field">
                 <span>Формат</span>
                 <select v-model="options.format">
-                  <option value="webp">WebP</option>
                   <option value="jpeg">JPEG</option>
                 </select>
               </label>

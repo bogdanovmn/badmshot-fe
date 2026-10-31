@@ -43,6 +43,11 @@ export interface Player {
   displayLabel: string
 }
 
+export interface PlayerLetterCount {
+  letter: string
+  count: number
+}
+
 export interface ScreenshotCard {
   id: string
   matchId: string
@@ -361,7 +366,7 @@ export interface IndexDefaults {
 
 export type ArchiveJobMode = 'META' | 'SCREENSHOTS'
 
-export type ScreenshotFormat = 'jpeg' | 'webp'
+export type ScreenshotFormat = 'jpeg'
 
 export interface IndexOptions {
   mode?: ArchiveJobMode
@@ -528,16 +533,16 @@ export async function getPlayers(params: { clubId?: string; term?: string } = {}
   return makeApiRequest<Player[]>('get', '/filters/players', params)
 }
 
-export async function getPlayerLetters(): Promise<string[]> {
-  return makeApiRequest<string[]>('get', '/filters/players/letters')
+export async function getPlayerLetters(unprocessed = false): Promise<PlayerLetterCount[]> {
+  return makeApiRequest<PlayerLetterCount[]>('get', '/filters/players/letters', { unprocessed })
 }
 
-export async function getPlayersByLetter(letter: string): Promise<Player[]> {
-  return makeApiRequest<Player[]>('get', '/filters/players', { letter })
+export async function getPlayersByLetter(letter: string, unprocessed = false): Promise<Player[]> {
+  return makeApiRequest<Player[]>('get', '/filters/players', { letter, unprocessed })
 }
 
-export async function getPlayersWithoutGames(): Promise<Player[]> {
-  return makeApiRequest<Player[]>('get', '/filters/players/no-games')
+export async function getPlayersWithoutGames(unprocessed = false): Promise<Player[]> {
+  return makeApiRequest<Player[]>('get', '/filters/players/no-games', { unprocessed })
 }
 
 export async function getPlayersByIds(ids: string[]): Promise<Player[]> {

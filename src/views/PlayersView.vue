@@ -6,10 +6,16 @@
             игроком.
         </p>
 
+        <label class="toggle">
+            <input v-model="unprocessedOnly" type="checkbox" @change="load()" />
+            <span>Только необработанные</span>
+        </label>
+
         <div class="letter-filter" role="group" aria-label="Фильтр по первой букве">
-            <button v-for="letter in letters" :key="letter" type="button" class="letter-btn"
-                :class="{ active: selectedLetter === letter }" @click="selectLetter(letter)">
-                {{ letter }}
+            <button v-for="item in letters" :key="item.letter" type="button" class="letter-btn"
+                :class="{ active: selectedLetter === item.letter }" @click="selectLetter(item.letter)">
+                <span>{{ item.letter }}</span>
+                <span class="letter-count">{{ item.count }}</span>
             </button>
             <button type="button" class="letter-btn" :class="{ active: selectedLetter === NO_GAMES }"
                 @click="selectLetter(NO_GAMES)">
@@ -96,7 +102,7 @@
         getPlayersWithoutGames,
         updatePlayer
     } from '@/api'
-    import type { Player, PlayerAlias, PlayerRenameResult } from '@/api'
+    import type { Player, PlayerAlias, PlayerLetterCount, PlayerRenameResult } from '@/api'
     import ErrorNotice from '@/components/ErrorNotice.vue'
     import PlayerRenameDialog from '@/components/PlayerRenameDialog.vue'
 
@@ -109,8 +115,9 @@
 
     const NO_GAMES = '__no_games__'
 
-    const letters = ref < string[] > ([])
+    const letters = ref < PlayerLetterCount[] > ([])
     const selectedLetter = ref < string | null > (null)
+    const unprocessedOnly = ref(true)
     const players = ref < Player[] > ([])
     const edits = reactive < Record < string, PlayerEdit>> ({})
     const loading = ref(true)
@@ -132,22 +139,27 @@
         return edits[id]?.alias ?? null
     }
 
-    async function load() {
-        loading.value = true
+    async function load(silent = false) {
+        if (!silent) {
+            loading.value = true
+        }
         error.value = null
         try {
-            const foundLetters = await getPlayerLetters()
-            letters.value = [...foundLetters].sort((left, right) => left.localeCompare(right, 'ru'))
+            const foundLetters = await getPlayerLetters(unprocessedOnly.value)
+            letters.value = [...foundLetters].sort(
+                (left, right) => left.letter.localeCompare(right.letter, 'ru')
+            )
             const knownFilter = selectedLetter.value === NO_GAMES || (
-                selectedLetter.value !== null && letters.value.includes(selectedLetter.value)
+                selectedLetter.value !== null
+                && letters.value.some(item => item.letter === selectedLetter.value)
             )
             if (!knownFilter) {
-                selectedLetter.value = letters.value[0] ?? NO_GAMES
+                selectedLetter.value = letters.value[0]?.letter ?? NO_GAMES
             }
             players.value = selectedLetter.value === NO_GAMES
-                ? await getPlayersWithoutGames()
+                ? await getPlayersWithoutGames(unprocessedOnly.value)
                 : selectedLetter.value
-                    ? await getPlayersByLetter(selectedLetter.value)
+                    ? await getPlayersByLetter(selectedLetter.value, unprocessedOnly.value)
                     : []
             Object.keys(edits).forEach(key => delete edits[key])
             Object.keys(aliasTerms).forEach(key => delete aliasTerms[key])
@@ -200,6 +212,9 @@
             player.displayLabel = displayName ?? player.name
             edit.displayName = displayName ?? ''
             savedId.value = player.id
+            if (unprocessedOnly.value) {
+                await load(true)
+            }
         } catch (e) {
             error.value = getErrorMessage(e, 'Не удалось сохранить игрока')
         } finally {
@@ -324,6 +339,24 @@
         font-size: 0.9rem;
     }
 
+    .toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        align-self: flex-start;
+        color: var(--color-text);
+        font-size: 0.9rem;
+        cursor: pointer;
+        user-select: none;
+    }
+
+    .toggle input {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--color-primary);
+        cursor: pointer;
+    }
+
     .letter-filter {
         display: flex;
         flex-wrap: wrap;
@@ -331,6 +364,9 @@
     }
 
     .letter-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
         min-width: 38px;
         min-height: 38px;
         padding: 0.3rem 0.55rem;
@@ -340,6 +376,17 @@
         color: var(--color-text);
         font-weight: 600;
         cursor: pointer;
+    }
+
+    .letter-count {
+        color: var(--color-muted);
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+
+    .letter-btn.active .letter-count {
+        color: inherit;
+        opacity: 0.8;
     }
 
     .letter-btn:hover {

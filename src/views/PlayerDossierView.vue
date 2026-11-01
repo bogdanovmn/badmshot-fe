@@ -47,6 +47,7 @@
             Смотреть все кадры
           </router-link>
           <router-link
+            v-if="auth.isAdmin"
             class="link-btn link-btn--secondary"
             :to="{ path: '/archive', query: { playerId, type: 'GAMES' } }"
           >
@@ -72,8 +73,7 @@
       </section>
 
       <section v-else-if="activeTab === 'clubs'" class="panel">
-        <h2>Клубы</h2>
-        <div v-if="dossier.clubs.length === 0" class="empty">Клубы не найдены.</div>
+        <div v-if="clubYearGroups.length === 0" class="empty">Клубы не найдены.</div>
         <table v-else class="stats-table">
           <thead>
             <tr>
@@ -83,16 +83,16 @@
             </tr>
           </thead>
           <tbody>
-            <template v-for="club in dossier.clubs" :key="club.id">
-              <tr class="club-row">
+            <template v-for="group in clubYearGroups" :key="group.year">
+              <tr class="year-row">
+                <td>{{ group.year }}</td>
+                <td class="num">{{ group.matches }}</td>
+                <td class="num">{{ formatDurationHuman(group.durationSeconds) }}</td>
+              </tr>
+              <tr v-for="club in group.clubs" :key="`${group.year}-${club.id}`" class="club-row">
                 <td>{{ club.name }}</td>
                 <td class="num">{{ club.matches }}</td>
                 <td class="num">{{ formatDurationHuman(club.durationSeconds) }}</td>
-              </tr>
-              <tr v-for="year in club.years" :key="`${club.id}-${year.year}`" class="year-row">
-                <td>{{ year.year }}</td>
-                <td class="num">{{ year.matches }}</td>
-                <td class="num">{{ formatDurationHuman(year.durationSeconds) }}</td>
               </tr>
             </template>
           </tbody>
@@ -131,15 +131,16 @@ import {
   getTopScreenshots
 } from '@/api'
 import type { CatalogTag, PlayerDossier, TopScreenshotCard } from '@/api'
-import { formatArchiveSize, formatDurationHuman } from '@/common'
+import { formatArchiveDuration, formatArchiveSize, formatDurationHuman } from '@/common'
 import BackButton from '@/components/BackButton.vue'
 import ErrorNotice from '@/components/ErrorNotice.vue'
 import FrameThumb from '@/components/FrameThumb.vue'
 import NavIcon from '@/components/NavIcon.vue'
 import TagCloudSection from '@/components/TagCloudSection.vue'
+import { authStore } from '@/stores/auth'
 
 type DossierTab = 'stats' | 'frames' | 'clubs' | 'partners' | 'opponents'
-type TabIcon = 'stats' | 'frames' | 'clubs' | 'partners' | 'opponents'
+type TabIcon = 'stats' | 'top' | 'clubs' | 'partners' | 'opponents'
 
 interface StatCard {
   key: string
@@ -147,9 +148,16 @@ interface StatCard {
   caption: string
 }
 
+interface ClubYearGroup {
+  year: number
+  matches: number
+  durationSeconds: number
+  clubs: { id: string; name: string; matches: number; durationSeconds: number }[]
+}
+
 const tabs: { key: DossierTab; label: string; icon: TabIcon }[] = [
   { key: 'stats', label: 'Статистика', icon: 'stats' },
-  { key: 'frames', label: 'Лучшие кадры', icon: 'frames' },
+  { key: 'frames', label: 'Лучшие кадры', icon: 'top' },
   { key: 'clubs', label: 'Клубы', icon: 'clubs' },
   { key: 'partners', label: 'Партнёры', icon: 'partners' },
   { key: 'opponents', label: 'Соперники', icon: 'opponents' }
@@ -157,6 +165,7 @@ const tabs: { key: DossierTab; label: string; icon: TabIcon }[] = [
 
 const route = useRoute()
 const router = useRouter()
+const auth = authStore()
 
 const dossier = ref<PlayerDossier | null>(null)
 const loading = ref(true)
@@ -183,7 +192,7 @@ const statCards = computed<StatCard[]>(() => {
     { key: 'games', raw: stats.games, value: String(stats.games), caption: 'игр' },
     { key: 'trainings', raw: stats.trainings, value: String(stats.trainings), caption: 'тренировок' },
     { key: 'size', raw: stats.sizeMbytes, value: formatArchiveSize(stats.sizeMbytes), caption: 'размер в архиве' },
-    { key: 'duration', raw: stats.durationSeconds, value: formatDurationHuman(stats.durationSeconds), caption: 'время в архиве' },
+    { key: 'duration', raw: stats.durationSeconds, value: formatArchiveDuration(stats.durationSeconds), caption: 'время в архиве' },
     { key: 'frames', raw: stats.screenshotCount, value: String(stats.screenshotCount), caption: 'кадров' },
     { key: 'likes', raw: stats.framesWithLikes, value: String(stats.framesWithLikes), caption: 'кадров с лайками' },
     { key: 'shares', raw: stats.framesWithShares, value: String(stats.framesWithShares), caption: 'кадров с шарингами' },
@@ -193,6 +202,35 @@ const statCards = computed<StatCard[]>(() => {
   return cards
     .filter(card => card.raw > 0)
     .map(({ key, value, caption }) => ({ key, value, caption }))
+})
+
+/** Клубы группируются сначала по году (по убыванию), внутри года — по количеству игр. */
+const clubYearGroups = computed<ClubYearGroup[]>(() => {
+  const groups = new Map<number, ClubYearGroup>()
+  for (const club of dossier.value?.clubs ?? []) {
+    for (const year of club.years) {
+      let group = groups.get(year.year)
+      if (!group) {
+        group = { year: year.year, matches: 0, durationSeconds: 0, clubs: [] }
+        groups.set(year.year, group)
+      }
+      group.matches += year.matches
+      group.durationSeconds += year.durationSeconds
+      group.clubs.push({
+        id: club.id,
+        name: club.name,
+        matches: year.matches,
+        durationSeconds: year.durationSeconds
+      })
+    }
+  }
+  const result = [...groups.values()].sort((left, right) => right.year - left.year)
+  for (const group of result) {
+    group.clubs.sort((left, right) =>
+      right.matches - left.matches || left.name.localeCompare(right.name, 'ru')
+    )
+  }
+  return result
 })
 
 async function load() {
@@ -342,10 +380,6 @@ h1 {
   gap: 1rem;
 }
 
-h2 {
-  font-size: 1.1rem;
-}
-
 .summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -449,14 +483,13 @@ h2 {
   white-space: nowrap;
 }
 
-.club-row {
+.year-row {
   font-weight: 700;
   background: var(--color-primary-soft);
 }
 
-.year-row td:first-child {
+.club-row td:first-child {
   padding-left: 1.75rem;
-  color: var(--color-muted);
 }
 
 .loading,

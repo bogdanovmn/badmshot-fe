@@ -97,6 +97,27 @@
       <circle cx="12" cy="12" r="6" />
       <circle cx="12" cy="12" r="2" />
     </template>
+    <template v-else-if="name === 'players'">
+      <circle cx="12" cy="6" r="2.6" />
+      <path d="M7 21v-1.4A5 5 0 0 1 12 14.6a5 5 0 0 1 5 5V21" />
+      <circle cx="4.6" cy="8.6" r="2.1" />
+      <path d="M1 21v-1a4 4 0 0 1 4-4" />
+      <circle cx="19.4" cy="8.6" r="2.1" />
+      <path d="M23 21v-1a4 4 0 0 0-4-4" />
+    </template>
+    <template v-else-if="name === 'indi'">
+      <circle cx="12" cy="13" r="7" />
+      <path d="M5.4 8.6h13.2" />
+      <path d="M5.6 10.7h12.8" />
+      <path d="M18.6 9.6l3.2-1.8" />
+      <path d="M18.6 9.6l3.2 1.8" />
+      <circle cx="9.4" cy="13.6" r="0.8" />
+      <circle cx="14.6" cy="13.6" r="0.8" />
+      <path d="M9.6 17.2c1.5 1.1 3.3 1.1 4.8 0" />
+    </template>
+    <template v-else-if="name === 'service'">
+      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+    </template>
   </svg>
 </template>
 
@@ -119,6 +140,9 @@ type NavIconName =
   | 'clubs'
   | 'partners'
   | 'opponents'
+  | 'players'
+  | 'indi'
+  | 'service'
 
 defineProps<{ name: NavIconName }>()
 </script>

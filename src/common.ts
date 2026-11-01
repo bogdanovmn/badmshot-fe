@@ -39,6 +39,18 @@ export function formatDurationHuman(totalSeconds: number | null | undefined): st
   return `${minutes} мин`
 }
 
+/** Длительность от часа и больше показываем целыми часами. */
+export function formatArchiveDuration(totalSeconds: number | null | undefined): string {
+  if (!totalSeconds || totalSeconds <= 0) {
+    return '—'
+  }
+  const hours = totalSeconds / 3600
+  if (hours >= 1) {
+    return `${Math.round(hours)} ч`
+  }
+  return `${Math.floor(totalSeconds / 60)} мин`
+}
+
 export function formatElapsed(totalSeconds: number): string {
   if (totalSeconds <= 0) {
     return '0 сек'

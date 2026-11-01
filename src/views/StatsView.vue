@@ -11,11 +11,11 @@
         </template>
         <template v-else-if="activeTab === 'players'">
           Чем больше у игрока матчей, тем крупнее и ярче тэг.
-          <template v-if="auth.isAdmin">
+          <template v-if="auth.isAuthenticated">
             Нажмите на тэг, чтобы открыть досье игрока.
           </template>
           <template v-else>
-            Нажмите на тэг, чтобы открыть его кадры.
+            Войдите в систему, чтобы открыть досье игрока.
           </template>
         </template>
         <template v-else>
@@ -36,9 +36,12 @@
         :class="{ active: activeTab === tab.key }"
         role="tab"
         :aria-selected="activeTab === tab.key"
+        :title="tab.label"
+        :aria-label="tab.label"
         @click="selectTab(tab.key)"
       >
-        {{ tab.label }}
+        <NavIcon :name="tab.icon" class="tab-icon" />
+        <span class="tab-label">{{ tab.label }}</span>
       </button>
     </div>
 
@@ -130,7 +133,7 @@
           unit="тренировок"
           narrow
           :interactive="auth.isAuthenticated"
-          @select="tag => open('players', tag, 'INDI')"
+          @select="openPlayer"
         />
       </section>
     </template>
@@ -149,10 +152,12 @@ import {
 } from '@/api'
 import type { ArchiveStats, ArchiveType, CatalogTag, SiteActivityStats } from '@/api'
 import ErrorNotice from '@/components/ErrorNotice.vue'
+import NavIcon from '@/components/NavIcon.vue'
 import TagCloudSection from '@/components/TagCloudSection.vue'
 import { authStore } from '@/stores/auth'
 
 type StatsTab = 'players' | 'clubs' | 'indi' | 'archive' | 'service'
+type TabIcon = 'players' | 'clubs' | 'indi' | 'archive' | 'service'
 
 interface ArchiveTotals {
   matches: number
@@ -165,12 +170,12 @@ interface ArchiveTotals {
 const router = useRouter()
 const auth = authStore()
 
-const tabs: { key: StatsTab; label: string }[] = [
-  { key: 'players', label: 'Игроки' },
-  { key: 'clubs', label: 'Клубы' },
-  { key: 'indi', label: 'Индивидуальные тренировки' },
-  { key: 'archive', label: 'Архив' },
-  { key: 'service', label: 'Сервис' }
+const tabs: { key: StatsTab; label: string; icon: TabIcon }[] = [
+  { key: 'players', label: 'Игроки', icon: 'players' },
+  { key: 'clubs', label: 'Клубы', icon: 'clubs' },
+  { key: 'indi', label: 'Индивидуальные тренировки', icon: 'indi' },
+  { key: 'archive', label: 'Архив', icon: 'archive' },
+  { key: 'service', label: 'Сервис', icon: 'service' }
 ]
 
 const activeTab = ref<StatsTab>('players')
@@ -276,11 +281,7 @@ function openPlayer(tag: CatalogTag) {
   if (!auth.isAuthenticated) {
     return
   }
-  if (auth.isAdmin) {
-    router.push({ name: 'player-dossier', params: { id: tag.id } })
-    return
-  }
-  open('players', tag, 'GAMES')
+  router.push({ name: 'player-dossier', params: { id: tag.id } })
 }
 
 onMounted(() => {
@@ -320,6 +321,9 @@ onMounted(() => {
 }
 
 .tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   min-height: 38px;
   padding: 0.4rem 1rem;
   border: 1px solid var(--color-border);
@@ -338,6 +342,22 @@ onMounted(() => {
   border-color: var(--color-primary);
   background: var(--color-primary);
   color: var(--color-on-primary);
+}
+
+.tab-icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+@media (max-width: 640px) {
+  .tab {
+    padding: 0.4rem 0.7rem;
+  }
+
+  .tab-label {
+    display: none;
+  }
 }
 
 .cloud-section,

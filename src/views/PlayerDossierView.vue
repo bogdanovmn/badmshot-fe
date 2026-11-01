@@ -17,9 +17,12 @@
         type="button"
         role="tab"
         :aria-selected="activeTab === tab.key"
+        :title="tab.label"
+        :aria-label="tab.label"
         @click="selectTab(tab.key)"
       >
-        {{ tab.label }}
+        <NavIcon :name="tab.icon" class="tab-icon" />
+        <span class="tab-label">{{ tab.label }}</span>
       </button>
     </div>
 
@@ -28,35 +31,27 @@
 
     <template v-else-if="dossier">
       <section v-if="activeTab === 'stats'" class="panel">
-        <div class="summary">
-          <div class="card">
-            <span class="value">{{ dossier.stats.games }}</span>
-            <span class="caption">игр</span>
-          </div>
-          <div class="card">
-            <span class="value">{{ dossier.stats.trainings }}</span>
-            <span class="caption">тренировок</span>
-          </div>
-          <div class="card">
-            <span class="value">{{ formatBytesHuman(dossier.stats.sizeMbytes) }}</span>
-            <span class="caption">размер в архиве</span>
-          </div>
-          <div class="card">
-            <span class="value">{{ formatDurationHuman(dossier.stats.durationSeconds) }}</span>
-            <span class="caption">время в архиве</span>
-          </div>
-          <div class="card">
-            <span class="value">{{ dossier.stats.screenshotCount }}</span>
-            <span class="caption">кадров</span>
+        <div v-if="statCards.length" class="summary">
+          <div v-for="card in statCards" :key="card.key" class="card">
+            <span class="value">{{ card.value }}</span>
+            <span class="caption">{{ card.caption }}</span>
           </div>
         </div>
 
         <div class="quick-links">
           <router-link
             class="link-btn"
-            :to="{ path: '/archive', query: { playerId: playerId, type: 'GAMES' } }"
+            :to="{ path: '/explore', query: { players: playerId } }"
           >
-            Файлы игрока в архиве
+            <NavIcon name="frames" class="link-icon" />
+            Смотреть все кадры
+          </router-link>
+          <router-link
+            class="link-btn link-btn--secondary"
+            :to="{ path: '/archive', query: { playerId, type: 'GAMES' } }"
+          >
+            <NavIcon name="files" class="link-icon" />
+            Файлы в архиве
           </router-link>
         </div>
       </section>
@@ -84,7 +79,6 @@
             <tr>
               <th>Клуб</th>
               <th class="num">Игр</th>
-              <th class="num">Размер</th>
               <th class="num">Длительность</th>
             </tr>
           </thead>
@@ -93,13 +87,11 @@
               <tr class="club-row">
                 <td>{{ club.name }}</td>
                 <td class="num">{{ club.matches }}</td>
-                <td class="num">{{ formatBytesHuman(club.sizeMbytes) }}</td>
                 <td class="num">{{ formatDurationHuman(club.durationSeconds) }}</td>
               </tr>
               <tr v-for="year in club.years" :key="`${club.id}-${year.year}`" class="year-row">
                 <td>{{ year.year }}</td>
                 <td class="num">{{ year.matches }}</td>
-                <td class="num">{{ formatBytesHuman(year.sizeMbytes) }}</td>
                 <td class="num">{{ formatDurationHuman(year.durationSeconds) }}</td>
               </tr>
             </template>
@@ -108,33 +100,23 @@
       </section>
 
       <section v-else-if="activeTab === 'partners'" class="panel">
-        <h2>Партнеры</h2>
-        <p class="hint">
-          Вес тега — количество игр с этим партнёром. Партнёры определяются по парам:
-          первые два игрока в матче и последние два игрока.
-        </p>
-        <TagCloud
-          v-if="dossier.partners.length"
+        <TagCloudSection
           :tags="dossier.partners"
           unit="игр"
+          narrow
+          empty-text="Партнёры не найдены."
           @select="openPlayer"
         />
-        <div v-else class="empty">Партнёры не найдены.</div>
       </section>
 
       <section v-else-if="activeTab === 'opponents'" class="panel">
-        <h2>Соперники</h2>
-        <p class="hint">
-          Вес тега — количество игр с этим соперником. В парах соперниками считаются
-          игроки из противоположной пары, в одиночных матчах — второй игрок.
-        </p>
-        <TagCloud
-          v-if="dossier.opponents.length"
+        <TagCloudSection
           :tags="dossier.opponents"
           unit="игр"
+          narrow
+          empty-text="Соперники не найдены."
           @select="openPlayer"
         />
-        <div v-else class="empty">Соперники не найдены.</div>
       </section>
     </template>
   </div>
@@ -149,20 +131,28 @@ import {
   getTopScreenshots
 } from '@/api'
 import type { CatalogTag, PlayerDossier, TopScreenshotCard } from '@/api'
-import { formatBytesHuman, formatDurationHuman } from '@/common'
+import { formatArchiveSize, formatDurationHuman } from '@/common'
 import BackButton from '@/components/BackButton.vue'
 import ErrorNotice from '@/components/ErrorNotice.vue'
 import FrameThumb from '@/components/FrameThumb.vue'
-import TagCloud from '@/components/TagCloud.vue'
+import NavIcon from '@/components/NavIcon.vue'
+import TagCloudSection from '@/components/TagCloudSection.vue'
 
 type DossierTab = 'stats' | 'frames' | 'clubs' | 'partners' | 'opponents'
+type TabIcon = 'stats' | 'frames' | 'clubs' | 'partners' | 'opponents'
 
-const tabs: { key: DossierTab; label: string }[] = [
-  { key: 'stats', label: 'Статистика' },
-  { key: 'frames', label: 'Лучшие кадры' },
-  { key: 'clubs', label: 'Клубы' },
-  { key: 'partners', label: 'Партнёры' },
-  { key: 'opponents', label: 'Соперники' }
+interface StatCard {
+  key: string
+  value: string
+  caption: string
+}
+
+const tabs: { key: DossierTab; label: string; icon: TabIcon }[] = [
+  { key: 'stats', label: 'Статистика', icon: 'stats' },
+  { key: 'frames', label: 'Лучшие кадры', icon: 'frames' },
+  { key: 'clubs', label: 'Клубы', icon: 'clubs' },
+  { key: 'partners', label: 'Партнёры', icon: 'partners' },
+  { key: 'opponents', label: 'Соперники', icon: 'opponents' }
 ]
 
 const route = useRoute()
@@ -183,6 +173,27 @@ const playerId = computed(() => {
   return typeof value === 'string' ? value : ''
 })
 const playerLabel = computed(() => dossier.value?.player.displayLabel ?? 'Игрок')
+
+const statCards = computed<StatCard[]>(() => {
+  const stats = dossier.value?.stats
+  if (!stats) {
+    return []
+  }
+  const cards = [
+    { key: 'games', raw: stats.games, value: String(stats.games), caption: 'игр' },
+    { key: 'trainings', raw: stats.trainings, value: String(stats.trainings), caption: 'тренировок' },
+    { key: 'size', raw: stats.sizeMbytes, value: formatArchiveSize(stats.sizeMbytes), caption: 'размер в архиве' },
+    { key: 'duration', raw: stats.durationSeconds, value: formatDurationHuman(stats.durationSeconds), caption: 'время в архиве' },
+    { key: 'frames', raw: stats.screenshotCount, value: String(stats.screenshotCount), caption: 'кадров' },
+    { key: 'likes', raw: stats.framesWithLikes, value: String(stats.framesWithLikes), caption: 'кадров с лайками' },
+    { key: 'shares', raw: stats.framesWithShares, value: String(stats.framesWithShares), caption: 'кадров с шарингами' },
+    { key: 'views', raw: stats.views, value: stats.views.toLocaleString('ru-RU'), caption: 'просмотров' },
+    { key: 'comments', raw: stats.comments, value: stats.comments.toLocaleString('ru-RU'), caption: 'комментариев' }
+  ]
+  return cards
+    .filter(card => card.raw > 0)
+    .map(({ key, value, caption }) => ({ key, value, caption }))
+})
 
 async function load() {
   if (!playerId.value) {
@@ -286,6 +297,9 @@ h1 {
 }
 
 .tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   min-height: 38px;
   padding: 0.4rem 1rem;
   border: 1px solid var(--color-border);
@@ -306,6 +320,22 @@ h1 {
   color: var(--color-on-primary);
 }
 
+.tab-icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+@media (max-width: 640px) {
+  .tab {
+    padding: 0.4rem 0.7rem;
+  }
+
+  .tab-label {
+    display: none;
+  }
+}
+
 .panel {
   display: flex;
   flex-direction: column;
@@ -314,11 +344,6 @@ h1 {
 
 h2 {
   font-size: 1.1rem;
-}
-
-.hint {
-  color: var(--color-muted);
-  font-size: 0.9rem;
 }
 
 .summary {
@@ -357,21 +382,40 @@ h2 {
 }
 
 .link-btn {
-  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   min-height: 38px;
   padding: 0.4rem 0.9rem;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-primary);
   border-radius: 8px;
-  background: var(--color-surface);
-  color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
   font-size: 0.9rem;
   font-weight: 600;
   text-decoration: none;
 }
 
 .link-btn:hover {
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+}
+
+.link-btn--secondary {
+  border-color: var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-primary);
+}
+
+.link-btn--secondary:hover {
   background: var(--color-primary-soft);
   border-color: var(--color-primary);
+}
+
+.link-icon {
+  width: 17px;
+  height: 17px;
+  flex: none;
 }
 
 .frame-list {

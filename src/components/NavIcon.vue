@@ -64,11 +64,61 @@
       <line x1="18" y1="6" x2="6" y2="18" />
       <line x1="6" y1="6" x2="18" y2="18" />
     </template>
+    <template v-else-if="name === 'player'">
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 21a8 8 0 0 1 16 0" />
+    </template>
+    <template v-else-if="name === 'files'">
+      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    </template>
+    <template v-else-if="name === 'frames'">
+      <rect x="2" y="3" width="20" height="18" rx="2" />
+      <line x1="7" y1="3" x2="7" y2="21" />
+      <line x1="17" y1="3" x2="17" y2="21" />
+      <line x1="2" y1="9" x2="7" y2="9" />
+      <line x1="2" y1="15" x2="7" y2="15" />
+      <line x1="17" y1="9" x2="22" y2="9" />
+      <line x1="17" y1="15" x2="22" y2="15" />
+    </template>
+    <template v-else-if="name === 'clubs'">
+      <path d="M3 21h18" />
+      <path d="M5 21V4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v17" />
+      <path d="M14 9h4a1 1 0 0 1 1 1v11" />
+      <path d="M8 7h3M8 11h3M8 15h3" />
+    </template>
+    <template v-else-if="name === 'partners'">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </template>
+    <template v-else-if="name === 'opponents'">
+      <circle cx="12" cy="12" r="10" />
+      <circle cx="12" cy="12" r="6" />
+      <circle cx="12" cy="12" r="2" />
+    </template>
   </svg>
 </template>
 
 <script setup lang="ts">
-type NavIconName = 'top' | 'stats' | 'explore' | 'liked' | 'archive' | 'comments' | 'faq' | 'share' | 'filters' | 'menu' | 'close'
+type NavIconName =
+  | 'top'
+  | 'stats'
+  | 'explore'
+  | 'liked'
+  | 'archive'
+  | 'comments'
+  | 'faq'
+  | 'share'
+  | 'filters'
+  | 'menu'
+  | 'close'
+  | 'player'
+  | 'files'
+  | 'frames'
+  | 'clubs'
+  | 'partners'
+  | 'opponents'
 
 defineProps<{ name: NavIconName }>()
 </script>

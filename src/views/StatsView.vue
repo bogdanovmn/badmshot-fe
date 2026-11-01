@@ -9,6 +9,15 @@
         <template v-else-if="activeTab === 'service'">
           Активность на сайте: пользователи, лайки, шаринги, просмотры и комментарии.
         </template>
+        <template v-else-if="activeTab === 'players'">
+          Чем больше у игрока матчей, тем крупнее и ярче тэг.
+          <template v-if="auth.isAdmin">
+            Нажмите на тэг, чтобы открыть досье игрока.
+          </template>
+          <template v-else>
+            Нажмите на тэг, чтобы открыть его кадры.
+          </template>
+        </template>
         <template v-else>
           Чем больше у тэга матчей, тем крупнее и ярче он выглядит.
           Наведите на тэг, чтобы увидеть точное количество.
@@ -97,36 +106,32 @@
       <div v-else-if="loading" class="loading">Загрузка...</div>
 
       <section v-else-if="activeTab === 'players'" class="cloud-section">
-        <TagCloud
-          v-if="playerTags.length"
+        <TagCloudSection
           :tags="playerTags"
           unit="матчей"
           :interactive="auth.isAuthenticated"
-          @select="tag => open('players', tag, 'GAMES')"
+          @select="openPlayer"
         />
-        <div v-else class="empty">Тэги не найдены.</div>
       </section>
 
-      <section v-else-if="activeTab === 'clubs'" class="cloud-section cloud-section--narrow">
-        <TagCloud
-          v-if="clubTags.length"
+      <section v-else-if="activeTab === 'clubs'" class="cloud-section">
+        <TagCloudSection
           :tags="clubTags"
           unit="матчей"
+          narrow
           :interactive="auth.isAuthenticated"
           @select="tag => open('clubs', tag, 'GAMES')"
         />
-        <div v-else class="empty">Тэги не найдены.</div>
       </section>
 
-      <section v-else-if="activeTab === 'indi'" class="cloud-section cloud-section--narrow">
-        <TagCloud
-          v-if="indiTags.length"
+      <section v-else-if="activeTab === 'indi'" class="cloud-section">
+        <TagCloudSection
           :tags="indiTags"
           unit="тренировок"
+          narrow
           :interactive="auth.isAuthenticated"
           @select="tag => open('players', tag, 'INDI')"
         />
-        <div v-else class="empty">Тэги не найдены.</div>
       </section>
     </template>
   </div>
@@ -144,7 +149,7 @@ import {
 } from '@/api'
 import type { ArchiveStats, ArchiveType, CatalogTag, SiteActivityStats } from '@/api'
 import ErrorNotice from '@/components/ErrorNotice.vue'
-import TagCloud from '@/components/TagCloud.vue'
+import TagCloudSection from '@/components/TagCloudSection.vue'
 import { authStore } from '@/stores/auth'
 
 type StatsTab = 'players' | 'clubs' | 'indi' | 'archive' | 'service'
@@ -206,10 +211,6 @@ const archiveTotals = computed<ArchiveTotals | null>(() => {
   }
 })
 
-function sorted(tags: CatalogTag[]): CatalogTag[] {
-  return [...tags].sort((left, right) => left.label.localeCompare(right.label, 'ru'))
-}
-
 async function loadClouds() {
   loading.value = true
   error.value = null
@@ -219,9 +220,9 @@ async function loadClouds() {
       getClubTags('GAMES'),
       getPlayerTags('INDI')
     ])
-    playerTags.value = sorted(players)
-    clubTags.value = sorted(clubs)
-    indiTags.value = sorted(indi)
+    playerTags.value = players
+    clubTags.value = clubs
+    indiTags.value = indi
   } catch (e) {
     error.value = getErrorMessage(e, 'Не удалось загрузить тэги')
   } finally {
@@ -269,6 +270,17 @@ function open(kind: 'players' | 'clubs', tag: CatalogTag, type: ArchiveType) {
     query.indi = '1'
   }
   router.push({ path: '/explore', query })
+}
+
+function openPlayer(tag: CatalogTag) {
+  if (!auth.isAuthenticated) {
+    return
+  }
+  if (auth.isAdmin) {
+    router.push({ name: 'player-dossier', params: { id: tag.id } })
+    return
+  }
+  open('players', tag, 'GAMES')
 }
 
 onMounted(() => {
@@ -335,17 +347,6 @@ onMounted(() => {
   gap: 1rem;
 }
 
-.cloud-section--narrow {
-  width: 75%;
-  margin: 0 auto;
-}
-
-@media (max-width: 600px) {
-  .cloud-section--narrow {
-    width: 100%;
-  }
-}
-
 .summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
@@ -386,15 +387,9 @@ onMounted(() => {
   text-decoration: underline;
 }
 
-.loading,
-.empty {
+.loading {
   text-align: center;
   padding: 2.5rem 1rem;
   color: var(--color-muted);
-}
-
-.empty {
-  border: 1px dashed var(--color-border);
-  border-radius: 8px;
 }
 </style>

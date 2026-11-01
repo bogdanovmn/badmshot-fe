@@ -5,6 +5,14 @@ export function formatBytesHuman(mbytes: number): string {
   return `${(mbytes / 1024).toFixed(1)} ГБ`
 }
 
+/** Крупные объёмы показываем целыми гигабайтами, мелкие — в мегабайтах. */
+export function formatArchiveSize(mbytes: number): string {
+  if (mbytes >= 1024) {
+    return `${Math.round(mbytes / 1024).toLocaleString('ru-RU')} ГБ`
+  }
+  return `${mbytes.toLocaleString('ru-RU')} МБ`
+}
+
 export function formatFileSize(bytes: number | null | undefined): string {
   if (!bytes || bytes <= 0) {
     return '—'

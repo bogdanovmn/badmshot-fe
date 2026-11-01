@@ -353,6 +353,10 @@ export interface PlayerDossierStats {
   sizeMbytes: number
   durationSeconds: number
   screenshotCount: number
+  framesWithLikes: number
+  framesWithShares: number
+  views: number
+  comments: number
 }
 
 export interface PlayerClubYearStat {

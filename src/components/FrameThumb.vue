@@ -248,4 +248,11 @@ function formatDate(value: string): string {
     bottom: 1.25rem;
   }
 }
+
+/* На узких экранах подписи на миниатюре не помещаются: делаем кадр выше примерно на 30%. */
+@media (max-width: 599px) {
+  .thumb-media {
+    aspect-ratio: 18 / 6.5;
+  }
+}
 </style>

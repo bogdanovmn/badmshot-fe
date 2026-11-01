@@ -37,6 +37,9 @@
                     <span v-if="aliasFor(player.id)" class="alias-hint">
                         Псевдоним: {{ aliasFor(player.id)?.displayLabel }}
                     </span>
+                    <router-link class="dossier-link" :to="{ name: 'player-dossier', params: { id: player.id } }">
+                        Досье игрока
+                    </router-link>
                 </div>
                 <label class="field">
                     <span>Отображаемое имя</span>
@@ -447,6 +450,17 @@
     .alias-hint {
         color: var(--color-muted);
         font-size: 0.75rem;
+    }
+
+    .dossier-link {
+        align-self: flex-start;
+        color: var(--color-primary);
+        font-size: 0.8rem;
+        text-decoration: none;
+    }
+
+    .dossier-link:hover {
+        text-decoration: underline;
     }
 
     .field {

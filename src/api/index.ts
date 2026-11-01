@@ -347,6 +347,38 @@ export interface ArchiveStats {
   players: CatalogStat[]
 }
 
+export interface PlayerDossierStats {
+  games: number
+  trainings: number
+  sizeMbytes: number
+  durationSeconds: number
+  screenshotCount: number
+}
+
+export interface PlayerClubYearStat {
+  year: number
+  matches: number
+  sizeMbytes: number
+  durationSeconds: number
+}
+
+export interface PlayerClubStat {
+  id: string
+  name: string
+  matches: number
+  sizeMbytes: number
+  durationSeconds: number
+  years: PlayerClubYearStat[]
+}
+
+export interface PlayerDossier {
+  player: Player
+  stats: PlayerDossierStats
+  clubs: PlayerClubStat[]
+  partners: CatalogTag[]
+  opponents: CatalogTag[]
+}
+
 export interface SiteActivityStats {
   users: number
   likes: number
@@ -465,8 +497,12 @@ function appendQuery(url: string, params: ScreenshotFilter): string {
   return query ? `${url}?${query}` : url
 }
 
-export async function getTopScreenshots(): Promise<TopScreenshotCard[]> {
-  return makeApiRequest<TopScreenshotCard[]>('get', '/screenshots/top')
+export async function getTopScreenshots(playerId?: string): Promise<TopScreenshotCard[]> {
+  return makeApiRequest<TopScreenshotCard[]>(
+    'get',
+    '/screenshots/top',
+    playerId ? { playerId } : {}
+  )
 }
 
 export async function getLikedScreenshots(): Promise<ScreenshotCard[]> {
@@ -730,6 +766,10 @@ export async function renamePlayerEverywhere(id: string, name: string): Promise<
 
 export async function getArchiveStats(type: ArchiveType = 'GAMES'): Promise<ArchiveStats> {
   return authApi.get<ArchiveStats>('/stats/archive', { type })
+}
+
+export async function getPlayerDossier(playerId: string): Promise<PlayerDossier> {
+  return authApi.get<PlayerDossier>(`/archive/players/${playerId}/dossier`)
 }
 
 export async function getSiteActivityStats(): Promise<SiteActivityStats> {

@@ -1,0 +1,429 @@
+<template>
+  <div class="page">
+    <div class="heading-row">
+      <BackButton fallback="/archive/stats" />
+      <div class="heading-text">
+        <h1>{{ playerLabel }}</h1>
+        <p class="subtitle">Досье игрока</p>
+      </div>
+    </div>
+
+    <div class="tabs" role="tablist" aria-label="Разделы досье">
+      <button
+        v-for="tab in tabs"
+        :key="tab.key"
+        class="tab"
+        :class="{ active: activeTab === tab.key }"
+        type="button"
+        role="tab"
+        :aria-selected="activeTab === tab.key"
+        @click="selectTab(tab.key)"
+      >
+        {{ tab.label }}
+      </button>
+    </div>
+
+    <ErrorNotice v-if="error" :message="error" />
+    <div v-else-if="loading" class="loading">Загрузка...</div>
+
+    <template v-else-if="dossier">
+      <section v-if="activeTab === 'stats'" class="panel">
+        <div class="summary">
+          <div class="card">
+            <span class="value">{{ dossier.stats.games }}</span>
+            <span class="caption">игр</span>
+          </div>
+          <div class="card">
+            <span class="value">{{ dossier.stats.trainings }}</span>
+            <span class="caption">тренировок</span>
+          </div>
+          <div class="card">
+            <span class="value">{{ formatBytesHuman(dossier.stats.sizeMbytes) }}</span>
+            <span class="caption">размер в архиве</span>
+          </div>
+          <div class="card">
+            <span class="value">{{ formatDurationHuman(dossier.stats.durationSeconds) }}</span>
+            <span class="caption">время в архиве</span>
+          </div>
+          <div class="card">
+            <span class="value">{{ dossier.stats.screenshotCount }}</span>
+            <span class="caption">кадров</span>
+          </div>
+        </div>
+
+        <div class="quick-links">
+          <router-link
+            class="link-btn"
+            :to="{ path: '/archive', query: { playerId: playerId, type: 'GAMES' } }"
+          >
+            Файлы игрока в архиве
+          </router-link>
+        </div>
+      </section>
+
+      <section v-else-if="activeTab === 'frames'" class="panel">
+        <ErrorNotice v-if="framesError" :message="framesError" />
+        <div v-else-if="framesLoading" class="loading">Загрузка кадров...</div>
+        <div v-else-if="frames.length === 0" class="empty">У этого игрока пока нет кадров.</div>
+        <div v-else class="frame-list">
+          <FrameThumb
+            v-for="card in frames"
+            :key="card.id"
+            :card="card"
+            hide-empty-stats
+            :to="{ name: 'player-dossier-frame', params: { playerId, id: card.id } }"
+          />
+        </div>
+      </section>
+
+      <section v-else-if="activeTab === 'clubs'" class="panel">
+        <h2>Клубы</h2>
+        <div v-if="dossier.clubs.length === 0" class="empty">Клубы не найдены.</div>
+        <table v-else class="stats-table">
+          <thead>
+            <tr>
+              <th>Клуб</th>
+              <th class="num">Игр</th>
+              <th class="num">Размер</th>
+              <th class="num">Длительность</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template v-for="club in dossier.clubs" :key="club.id">
+              <tr class="club-row">
+                <td>{{ club.name }}</td>
+                <td class="num">{{ club.matches }}</td>
+                <td class="num">{{ formatBytesHuman(club.sizeMbytes) }}</td>
+                <td class="num">{{ formatDurationHuman(club.durationSeconds) }}</td>
+              </tr>
+              <tr v-for="year in club.years" :key="`${club.id}-${year.year}`" class="year-row">
+                <td>{{ year.year }}</td>
+                <td class="num">{{ year.matches }}</td>
+                <td class="num">{{ formatBytesHuman(year.sizeMbytes) }}</td>
+                <td class="num">{{ formatDurationHuman(year.durationSeconds) }}</td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </section>
+
+      <section v-else-if="activeTab === 'partners'" class="panel">
+        <h2>Партнеры</h2>
+        <p class="hint">
+          Вес тега — количество игр с этим партнёром. Партнёры определяются по парам:
+          первые два игрока в матче и последние два игрока.
+        </p>
+        <TagCloud
+          v-if="dossier.partners.length"
+          :tags="dossier.partners"
+          unit="игр"
+          @select="openPlayer"
+        />
+        <div v-else class="empty">Партнёры не найдены.</div>
+      </section>
+
+      <section v-else-if="activeTab === 'opponents'" class="panel">
+        <h2>Соперники</h2>
+        <p class="hint">
+          Вес тега — количество игр с этим соперником. В парах соперниками считаются
+          игроки из противоположной пары, в одиночных матчах — второй игрок.
+        </p>
+        <TagCloud
+          v-if="dossier.opponents.length"
+          :tags="dossier.opponents"
+          unit="игр"
+          @select="openPlayer"
+        />
+        <div v-else class="empty">Соперники не найдены.</div>
+      </section>
+    </template>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import {
+  getErrorMessage,
+  getPlayerDossier,
+  getTopScreenshots
+} from '@/api'
+import type { CatalogTag, PlayerDossier, TopScreenshotCard } from '@/api'
+import { formatBytesHuman, formatDurationHuman } from '@/common'
+import BackButton from '@/components/BackButton.vue'
+import ErrorNotice from '@/components/ErrorNotice.vue'
+import FrameThumb from '@/components/FrameThumb.vue'
+import TagCloud from '@/components/TagCloud.vue'
+
+type DossierTab = 'stats' | 'frames' | 'clubs' | 'partners' | 'opponents'
+
+const tabs: { key: DossierTab; label: string }[] = [
+  { key: 'stats', label: 'Статистика' },
+  { key: 'frames', label: 'Лучшие кадры' },
+  { key: 'clubs', label: 'Клубы' },
+  { key: 'partners', label: 'Партнёры' },
+  { key: 'opponents', label: 'Соперники' }
+]
+
+const route = useRoute()
+const router = useRouter()
+
+const dossier = ref<PlayerDossier | null>(null)
+const loading = ref(true)
+const error = ref<string | null>(null)
+const activeTab = ref<DossierTab>('stats')
+
+const frames = ref<TopScreenshotCard[]>([])
+const framesLoading = ref(false)
+const framesLoaded = ref(false)
+const framesError = ref<string | null>(null)
+
+const playerId = computed(() => {
+  const value = route.params.id
+  return typeof value === 'string' ? value : ''
+})
+const playerLabel = computed(() => dossier.value?.player.displayLabel ?? 'Игрок')
+
+async function load() {
+  if (!playerId.value) {
+    error.value = 'Игрок не указан.'
+    loading.value = false
+    return
+  }
+  loading.value = true
+  error.value = null
+  try {
+    dossier.value = await getPlayerDossier(playerId.value)
+  } catch (e) {
+    dossier.value = null
+    error.value = getErrorMessage(e, 'Не удалось загрузить досье игрока')
+  } finally {
+    loading.value = false
+  }
+}
+
+async function loadFrames() {
+  if (framesLoaded.value || framesLoading.value || !playerId.value) {
+    return
+  }
+  framesLoading.value = true
+  framesError.value = null
+  try {
+    frames.value = await getTopScreenshots(playerId.value)
+    framesLoaded.value = true
+  } catch (e) {
+    framesError.value = getErrorMessage(e, 'Не удалось загрузить лучшие кадры игрока')
+  } finally {
+    framesLoading.value = false
+  }
+}
+
+function selectTab(tab: DossierTab) {
+  if (tab === activeTab.value) {
+    return
+  }
+  activeTab.value = tab
+  if (tab === 'frames') {
+    void loadFrames()
+  }
+}
+
+function openPlayer(tag: CatalogTag) {
+  if (tag.id === playerId.value) {
+    return
+  }
+  router.push({ name: 'player-dossier', params: { id: tag.id } })
+}
+
+watch(playerId, async (value, previous) => {
+  if (!value || value === previous) {
+    return
+  }
+  frames.value = []
+  framesLoaded.value = false
+  activeTab.value = 'stats'
+  await load()
+})
+
+onMounted(load)
+</script>
+
+<style scoped>
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.heading-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.heading-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+h1 {
+  font-size: 1.4rem;
+}
+
+.subtitle {
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.tab {
+  min-height: 38px;
+  padding: 0.4rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tab:hover {
+  border-color: var(--color-primary);
+}
+
+.tab.active {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+h2 {
+  font-size: 1.1rem;
+}
+
+.hint {
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+}
+
+.value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.caption {
+  color: var(--color-muted);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.quick-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.link-btn {
+  align-self: flex-start;
+  min-height: 38px;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-primary);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.link-btn:hover {
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary);
+}
+
+.frame-list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.stats-table th,
+.stats-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--color-row-border);
+  text-align: left;
+}
+
+.stats-table th {
+  color: var(--color-muted);
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.stats-table .num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.club-row {
+  font-weight: 700;
+  background: var(--color-primary-soft);
+}
+
+.year-row td:first-child {
+  padding-left: 1.75rem;
+  color: var(--color-muted);
+}
+
+.loading,
+.empty {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--color-muted);
+}
+
+.empty {
+  border: 1px dashed var(--color-border);
+  border-radius: 8px;
+}
+</style>

@@ -28,34 +28,63 @@
         <div class="card"><span class="value">{{ formatBytesHuman(stats.screenshotSizeMbytes) }}</span><span class="caption">объём кадров</span></div>
       </section>
 
-      <section>
-        <h2>По годам и месяцам</h2>
-        <table class="stats-table">
+      <div class="tabs tabs--sections" role="tablist" aria-label="Разделы статистики">
+        <button
+          v-for="tab in sectionTabs"
+          :key="tab.key"
+          class="tab"
+          :class="{ active: activeSection === tab.key }"
+          role="tab"
+          :aria-selected="activeSection === tab.key"
+          @click="selectSection(tab.key)"
+        >
+          {{ tab.label }}
+        </button>
+      </div>
+
+      <section v-if="activeSection === 'periods'">
+        <div class="section-head">
+          <h2>По годам и месяцам</h2>
+          <div v-if="stats.years.length" class="year-switch" role="group" aria-label="Год">
+            <button
+              v-for="year in stats.years"
+              :key="year.year"
+              class="year-btn"
+              :class="{ active: selectedYear === year.year }"
+              :title="`${year.year}: ${year.matches} ${unitLabel}`"
+              @click="selectedYear = year.year"
+            >
+              {{ year.year }}
+            </button>
+          </div>
+        </div>
+
+        <div v-if="!selectedYearStat" class="empty">Данные за период не найдены.</div>
+        <table v-else class="stats-table">
           <thead>
             <tr><th>Период</th><th class="num">{{ unitTitle }}</th><th class="num">Размер</th><th class="num">Длительность</th></tr>
           </thead>
           <tbody>
-            <template v-for="year in stats.years" :key="year.year">
-              <tr class="year-row">
-                <td>{{ year.year }}</td>
-                <td class="num">{{ year.matches }}</td>
-                <td class="num">{{ formatBytesHuman(year.sizeMbytes) }}</td>
-                <td class="num">{{ formatDurationHuman(year.durationSeconds) }}</td>
-              </tr>
-              <tr v-for="month in year.months" :key="`${year.year}-${month.month}`" class="month-row">
-                <td>{{ formatMonthRu(month.month) }}</td>
-                <td class="num">{{ month.matches }}</td>
-                <td class="num">{{ formatBytesHuman(month.sizeMbytes) }}</td>
-                <td class="num">{{ formatDurationHuman(month.durationSeconds) }}</td>
-              </tr>
-            </template>
+            <tr class="year-row">
+              <td>{{ selectedYearStat.year }}</td>
+              <td class="num">{{ selectedYearStat.matches }}</td>
+              <td class="num">{{ formatBytesHuman(selectedYearStat.sizeMbytes) }}</td>
+              <td class="num">{{ formatDurationHuman(selectedYearStat.durationSeconds) }}</td>
+            </tr>
+            <tr v-for="month in selectedYearStat.months" :key="month.month" class="month-row">
+              <td>{{ formatMonthRu(month.month) }}</td>
+              <td class="num">{{ month.matches }}</td>
+              <td class="num">{{ formatBytesHuman(month.sizeMbytes) }}</td>
+              <td class="num">{{ formatDurationHuman(month.durationSeconds) }}</td>
+            </tr>
           </tbody>
         </table>
       </section>
 
-      <section v-if="archiveType === 'GAMES'">
+      <section v-else-if="activeSection === 'clubs'">
         <h2>По клубам</h2>
-        <table class="stats-table">
+        <div v-if="stats.clubs.length === 0" class="empty">Данные по клубам не найдены.</div>
+        <table v-else class="stats-table">
           <thead>
             <tr><th>Клуб</th><th class="num">{{ unitTitle }}</th><th class="num">Размер</th><th class="num">Длительность</th></tr>
           </thead>
@@ -70,16 +99,23 @@
         </table>
       </section>
 
-      <section>
+      <section v-else-if="activeSection === 'players'">
         <h2>По игрокам</h2>
-        <table class="stats-table">
+        <div v-if="stats.players.length === 0" class="empty">Данные по игрокам не найдены.</div>
+        <table v-else class="stats-table">
           <thead>
             <tr><th>Игрок</th><th class="num">{{ unitTitle }}</th><th class="num">Размер</th><th class="num">Длительность</th></tr>
           </thead>
           <tbody>
             <tr v-for="player in stats.players" :key="player.id">
               <td>
-                <router-link :to="{ path: '/archive', query: { playerId: player.id } }">{{ player.name }}</router-link>
+                <router-link :to="{ name: 'player-dossier', params: { id: player.id } }">{{ player.name }}</router-link>
+                <router-link
+                  class="secondary-link"
+                  :to="{ path: '/archive', query: { playerId: player.id, type: archiveType } }"
+                >
+                  файлы
+                </router-link>
               </td>
               <td class="num">{{ player.matches }}</td>
               <td class="num">{{ formatBytesHuman(player.sizeMbytes) }}</td>
@@ -100,10 +136,14 @@ import BackButton from '@/components/BackButton.vue'
 import ErrorNotice from '@/components/ErrorNotice.vue'
 import { formatBytesHuman, formatDurationHuman, formatMonthRu } from '@/common'
 
+type SectionTab = 'periods' | 'clubs' | 'players'
+
 const stats = ref<ArchiveStats | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
 const archiveType = ref<ArchiveType>('GAMES')
+const activeSection = ref<SectionTab>('periods')
+const selectedYear = ref<number | null>(null)
 
 const typeTabs: { key: ArchiveType; label: string }[] = [
   { key: 'GAMES', label: 'Игры' },
@@ -113,11 +153,33 @@ const typeTabs: { key: ArchiveType; label: string }[] = [
 const unitLabel = computed(() => archiveType.value === 'INDI' ? 'тренировок' : 'матчей')
 const unitTitle = computed(() => archiveType.value === 'INDI' ? 'Тренировок' : 'Матчей')
 
+const sectionTabs = computed<{ key: SectionTab; label: string }[]>(() => {
+  const tabs: { key: SectionTab; label: string }[] = [
+    { key: 'periods', label: 'По годам и месяцам' }
+  ]
+  if (archiveType.value === 'GAMES') {
+    tabs.push({ key: 'clubs', label: 'По клубам' })
+  }
+  tabs.push({ key: 'players', label: 'По игрокам' })
+  return tabs
+})
+
+const selectedYearStat = computed(() => {
+  if (!stats.value || selectedYear.value === null) {
+    return null
+  }
+  return stats.value.years.find(year => year.year === selectedYear.value) ?? null
+})
+
 async function load() {
   loading.value = true
   error.value = null
   try {
-    stats.value = await getArchiveStats(archiveType.value)
+    const value = await getArchiveStats(archiveType.value)
+    stats.value = value
+    if (!value.years.some(year => year.year === selectedYear.value)) {
+      selectedYear.value = value.years[0]?.year ?? null
+    }
   } catch (e) {
     error.value = getErrorMessage(e, 'Не удалось загрузить статистику')
   } finally {
@@ -130,7 +192,14 @@ function selectType(type: ArchiveType) {
     return
   }
   archiveType.value = type
+  if (type === 'INDI' && activeSection.value === 'clubs') {
+    activeSection.value = 'periods'
+  }
   load()
+}
+
+function selectSection(section: SectionTab) {
+  activeSection.value = section
 }
 
 onMounted(load)
@@ -162,6 +231,11 @@ h2 {
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
+}
+
+.tabs--sections {
+  padding-top: 0.25rem;
+  border-top: 1px solid var(--color-row-border);
 }
 
 .tab {
@@ -218,6 +292,46 @@ h2 {
   font-size: 0.8rem;
 }
 
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.section-head h2 {
+  margin-bottom: 0;
+}
+
+.year-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.year-btn {
+  min-height: 34px;
+  padding: 0.25rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.year-btn:hover {
+  border-color: var(--color-primary);
+}
+
+.year-btn.active {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
 .stats-table {
   width: 100%;
   border-collapse: collapse;
@@ -251,6 +365,12 @@ h2 {
   text-decoration: underline;
 }
 
+.secondary-link {
+  margin-left: 0.6rem;
+  color: var(--color-muted) !important;
+  font-size: 0.8rem;
+}
+
 .year-row {
   font-weight: 700;
   background: var(--color-primary-soft);
@@ -262,7 +382,8 @@ h2 {
 }
 
 .loading,
-.error {
+.error,
+.empty {
   text-align: center;
   padding: 2rem 1rem;
   color: var(--color-muted);
@@ -270,5 +391,10 @@ h2 {
 
 .error {
   color: var(--color-danger);
+}
+
+.empty {
+  border: 1px dashed var(--color-border);
+  border-radius: 8px;
 }
 </style>

@@ -40,7 +40,7 @@
       </template>
 
       <template #overlay>
-        <router-link class="sequence-badge" :to="config.badgeTo" :title="config.badgeTitle">
+        <router-link class="sequence-badge" :to="badgeTo" :title="config.badgeTitle">
           {{ config.badgeText }}
         </router-link>
       </template>
@@ -50,7 +50,7 @@
       <div v-if="loading" class="stage-text">Загрузка кадра...</div>
       <template v-else>
         <ErrorNotice :message="error || 'Кадр не найден'" class="stage-error-notice" />
-        <router-link class="stage-cta" :to="config.badgeTo">{{ config.backText }}</router-link>
+        <router-link class="stage-cta" :to="badgeTo">{{ config.backText }}</router-link>
       </template>
     </div>
 
@@ -67,6 +67,7 @@ import {
   getLikedScreenshots,
   getMyCommentedScreenshots,
   getScreenshotCard,
+  getTopScreenshots,
   likeScreenshot,
   registerScreenshotView,
   unlikeScreenshot
@@ -76,7 +77,7 @@ import ErrorNotice from '@/components/ErrorNotice.vue'
 import ScreenshotFrame from '@/components/ScreenshotFrame.vue'
 import { topFramesStore } from '@/stores/topFrames'
 
-type SequenceKind = 'top' | 'liked' | 'comments' | 'profile-comments'
+type SequenceKind = 'top' | 'liked' | 'comments' | 'profile-comments' | 'dossier'
 
 interface SequenceConfig {
   loader: () => Promise<ScreenshotCard[]>
@@ -134,6 +135,17 @@ const CONFIGS: Record<SequenceKind, SequenceConfig> = {
     loadError: 'Не удалось загрузить мои комментарии',
     notFound: 'Вы больше не комментировали этот кадр.',
     empty: 'Вы пока не оставляли комментариев.'
+  },
+  dossier: {
+    loader: loadDossierCards,
+    routeName: 'player-dossier-frame',
+    badgeText: 'Лучший кадр игрока',
+    badgeTitle: 'Вернуться к досье игрока',
+    badgeTo: '/archive/stats',
+    backText: 'Вернуться к досье',
+    loadError: 'Не удалось загрузить лучшие кадры игрока',
+    notFound: 'Этот кадр больше не входит в лучшие кадры игрока.',
+    empty: 'У этого игрока пока нет кадров.'
   }
 }
 
@@ -161,14 +173,26 @@ function loadTopCards(): Promise<ScreenshotCard[]> {
     .then(items => items.map(item => ({ ...item, liked: false })))
 }
 
+async function loadDossierCards(): Promise<ScreenshotCard[]> {
+  if (!playerId.value) {
+    return []
+  }
+  const items = await getTopScreenshots(playerId.value)
+  return items.map(item => ({ ...item, liked: false }))
+}
+
 const kind = computed<SequenceKind>(() => {
   const sequence = route.meta.sequence
-  if (sequence === 'liked' || sequence === 'comments' || sequence === 'profile-comments') {
+  if (sequence === 'liked' || sequence === 'comments' || sequence === 'profile-comments' || sequence === 'dossier') {
     return sequence
   }
   return 'top'
 })
+const playerId = computed(() => typeof route.params.playerId === 'string' ? route.params.playerId : '')
 const config = computed(() => CONFIGS[kind.value])
+const badgeTo = computed(() => kind.value === 'dossier'
+  ? { name: 'player-dossier', params: { id: playerId.value } }
+  : config.value.badgeTo)
 const card = computed<ScreenshotCard | null>(() => cards.value[index.value] ?? null)
 const canPrev = computed(() => index.value > 0)
 const canNext = computed(() => index.value >= 0 && index.value < cards.value.length - 1)
@@ -285,13 +309,25 @@ watch(
 )
 
 watch(
+  () => route.params.playerId,
+  () => {
+    if (kind.value !== 'dossier') {
+      return
+    }
+    cards.value = []
+    index.value = -1
+    void load()
+  }
+)
+
+watch(
   () => card.value?.id,
   id => {
     if (!id) {
       return
     }
     void registerScreenshotView(id)
-    if (kind.value === 'top') {
+    if (kind.value === 'top' || kind.value === 'dossier') {
       void refreshLiked(id)
     }
   }

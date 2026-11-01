@@ -57,6 +57,13 @@ const router = createRouter({
     { path: '/archive/index-job', redirect: '/archive/manage', meta: { allow: Role.admin } },
     { path: '/archive/invalid', component: () => import('@/views/ArchiveInvalidView.vue'), meta: { allow: Role.admin } },
     { path: '/archive/stats', component: () => import('@/views/ArchiveStatsView.vue'), meta: { allow: Role.admin } },
+    { path: '/archive/players/:id', name: 'player-dossier', component: () => import('@/views/PlayerDossierView.vue'), meta: { allow: Role.admin } },
+    {
+      path: '/archive/players/:playerId/frames/:id',
+      name: 'player-dossier-frame',
+      component: () => import('@/views/FrameSequenceView.vue'),
+      meta: { allow: Role.admin, immersive: true, sequence: 'dossier' }
+    },
     { path: '/archive/matches/:id', component: () => import('@/views/ArchiveMatchView.vue'), meta: { allow: Role.admin }, props: true },
     { path: '/catalog', component: () => import('@/views/CatalogView.vue'), meta: { allow: Role.admin } },
     { path: '/players', redirect: { path: '/catalog', query: { tab: 'players' } }, meta: { allow: Role.admin } },

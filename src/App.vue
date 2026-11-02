@@ -136,10 +136,17 @@ function onDocumentClick(event: MouseEvent) {
   if (!menuOpen.value) {
     return
   }
-  const target = event.target as Node | null
-  if (navRef.value && target && !navRef.value.contains(target)) {
-    menuOpen.value = false
+  const nav = navRef.value
+  if (!nav) {
+    return
   }
+  // event.target может оказаться уже откреплённым от DOM узлом: иконка бургера
+  // перерисовывается (menu -> close) синхронно, до всплытия события до document.
+  // composedPath() фиксируется в момент события и всегда содержит сам <nav>.
+  if (event.composedPath().includes(nav)) {
+    return
+  }
+  menuOpen.value = false
 }
 
 function onKeydown(event: KeyboardEvent) {

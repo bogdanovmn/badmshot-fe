@@ -351,12 +351,43 @@ onMounted(() => {
 }
 
 @media (max-width: 640px) {
-  .tab {
-    padding: 0.4rem 0.7rem;
+  .tabs {
+    flex-wrap: nowrap;
+    gap: 0.35rem;
+    min-width: 0;
   }
 
+  .tab {
+    flex: 0 0 auto;
+    gap: 0;
+    padding: 0.4rem 0.55rem;
+  }
+
+  /* Сжиматься может только активная вкладка, поэтому все кнопки остаются в одной строке. */
+  .tab.active {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  /* Название выбранной вкладки плавно раскрывается внутри её контура. */
   .tab-label {
-    display: none;
+    display: block;
+    max-width: 0;
+    margin-left: 0;
+    opacity: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    transition:
+      max-width 0.28s ease,
+      opacity 0.2s ease,
+      margin-left 0.28s ease;
+  }
+
+  .tab.active .tab-label {
+    max-width: 100%;
+    margin-left: 0.4rem;
+    opacity: 1;
   }
 }
 

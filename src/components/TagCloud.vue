@@ -24,22 +24,22 @@
     const emit = defineEmits < { select: [tag: CatalogTag] } > ()
 
     const MIN_SIZE_REM = 0.7
-    const MAX_SIZE_REM = 4.0
+    const MAX_SIZE_REM = 3.4
     /** Количество групп, на которое делится первая (размерная) половина. */
-    const TAG_SIZE_STEPS = 3
+    const TAG_SIZE_STEPS = 7
     /** Всего групп: первая половина меняет размер, вторая — бледность и жирность. */
     const TAG_GROUPS = TAG_SIZE_STEPS * 2
     const GROUP_SPAN = Math.max(1, TAG_SIZE_STEPS - 1)
 
-    const MAX_FONT_WEIGHT = 700
-    const PALE_FONT_WEIGHT_START = 600
-    const PALE_FONT_WEIGHT_END = 400
-    const PALE_OPACITY_START = 0.85
-    const PALE_OPACITY_END = 0.16
+    const MAX_FONT_WEIGHT = 300
+    const PALE_FONT_WEIGHT_START = 300
+    const PALE_FONT_WEIGHT_END = 100
+    const PALE_OPACITY_START = 0.95
+    const PALE_OPACITY_END = 0.1
 
     /** Вклад абсолютного веса (в лог-шкале) и ранга в итоговый балл тэга. */
-    const MAGNITUDE_SHARE = 0.7
-    const RANK_SHARE = 0.3
+    const MAGNITUDE_SHARE = 0.9
+    const RANK_SHARE = 0.1
 
     /**
      * Квантование в 2*TAG_SIZE_STEPS групп по смешанному баллу:

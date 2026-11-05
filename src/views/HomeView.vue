@@ -41,7 +41,7 @@
 
     <div v-else-if="promo" class="teaser-end">
       <div class="teaser-card">
-        <h1>Badm Shot</h1>
+        <h1>Весёлый Кадр</h1>
         <p>
           Сервис показывает случайные кадры из архива матчей по бадминтону.
         </p>

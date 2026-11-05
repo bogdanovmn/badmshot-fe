@@ -13,7 +13,7 @@
           <NavIcon :name="menuOpen ? 'close' : 'menu'" />
         </button>
         <div class="nav-brand">
-          <router-link to="/">Badm Shot</router-link>
+          <router-link to="/">Весёлый Кадр</router-link>
         </div>
       </div>
       <div v-if="menuOpen" class="nav-dropdown">

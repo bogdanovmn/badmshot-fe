@@ -12,7 +12,7 @@
       @toggle-like="toggleLike"
     >
       <template #overlay>
-        <router-link class="share-badge" to="/" title="Открыть Badm Shot">
+        <router-link class="share-badge" to="/" title="Открыть Весёлый Кадр">
           Кадр по ссылке
         </router-link>
       </template>
@@ -22,7 +22,7 @@
       <div v-if="loading" class="stage-text">Загрузка кадра...</div>
       <template v-else>
         <ErrorNotice :message="error || 'Ссылка не найдена'" class="stage-error-notice" />
-        <router-link class="stage-cta" to="/">Открыть Badm Shot</router-link>
+        <router-link class="stage-cta" to="/">Открыть Весёлый Кадр</router-link>
       </template>
     </div>
 

@@ -38,6 +38,41 @@
           </div>
         </div>
 
+        <div v-if="favoritePartners.length || favoriteOpponents.length" class="favorites">
+          <div v-if="favoritePartners.length" class="favorite-card">
+            <h2 class="favorite-title">Любимые партнёры</h2>
+            <ul class="favorite-list">
+              <li v-for="partner in favoritePartners" :key="partner.id">
+                <button
+                  type="button"
+                  class="favorite-player"
+                  :title="`Открыть досье: ${partner.label}`"
+                  @click="openPlayer(partner)"
+                >
+                  <span class="favorite-name">{{ partner.label }}</span>
+                  <span class="favorite-count">{{ partner.matches }} игр</span>
+                </button>
+              </li>
+            </ul>
+          </div>
+          <div v-if="favoriteOpponents.length" class="favorite-card">
+            <h2 class="favorite-title">Любимые соперники</h2>
+            <ul class="favorite-list">
+              <li v-for="opponent in favoriteOpponents" :key="opponent.id">
+                <button
+                  type="button"
+                  class="favorite-player"
+                  :title="`Открыть досье: ${opponent.label}`"
+                  @click="openPlayer(opponent)"
+                >
+                  <span class="favorite-name">{{ opponent.label }}</span>
+                  <span class="favorite-count">{{ opponent.matches }} игр</span>
+                </button>
+              </li>
+            </ul>
+          </div>
+        </div>
+
         <div class="quick-links">
           <router-link
             class="link-btn"
@@ -203,6 +238,18 @@ const statCards = computed<StatCard[]>(() => {
     .filter(card => card.raw > 0)
     .map(({ key, value, caption }) => ({ key, value, caption }))
 })
+
+/** Два самых частых партнёра/соперника; при равенстве игр — по алфавиту. */
+function topRelations(tags: CatalogTag[] | undefined): CatalogTag[] {
+  return [...(tags ?? [])]
+    .sort((left, right) =>
+      right.matches - left.matches || left.label.localeCompare(right.label, 'ru')
+    )
+    .slice(0, 3)
+}
+
+const favoritePartners = computed(() => topRelations(dossier.value?.partners))
+const favoriteOpponents = computed(() => topRelations(dossier.value?.opponents))
 
 /** Клубы группируются сначала по году (по убыванию), внутри года — по количеству игр. */
 const clubYearGroups = computed<ClubYearGroup[]>(() => {
@@ -438,6 +485,67 @@ h1 {
   color: var(--color-muted);
   font-size: 0.8rem;
   text-align: center;
+}
+
+.favorites {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+}
+
+.favorite-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+}
+
+.favorite-title {
+  color: var(--color-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.favorite-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  list-style: none;
+}
+
+.favorite-player {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.3rem 0.4rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.favorite-player:hover,
+.favorite-player:focus-visible {
+  background: var(--color-primary-soft);
+}
+
+.favorite-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.favorite-count {
+  color: var(--color-muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
 }
 
 .quick-links {

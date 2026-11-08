@@ -73,6 +73,7 @@ const card = computed<ScreenshotCard | null>(() => {
     clubName: value.clubName,
     tournament: value.tournament,
     players: value.players,
+    playerIds: value.playerIds,
     likes: value.likes,
     shares: value.shares,
     comments: value.comments,

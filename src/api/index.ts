@@ -63,6 +63,7 @@ export interface ScreenshotCard {
   clubName: string | null
   tournament: boolean
   players: string[]
+  playerIds: string[]
   likes: number
   shares: number
   comments: number
@@ -105,6 +106,7 @@ export interface PublicSharedFrame {
   clubName: string | null
   tournament: boolean
   players: string[]
+  playerIds: string[]
   likes: number
   shares: number
   comments: number
@@ -467,6 +469,10 @@ export async function getTeaserScreenshots(): Promise<ScreenshotCard[]> {
 
 export async function getRandomScreenshot(): Promise<ScreenshotCard> {
   return authApi.get<ScreenshotCard>('/screenshots/random')
+}
+
+export async function getPlayerBackground(playerId: string): Promise<ScreenshotCard> {
+  return authApi.get<ScreenshotCard>(`/screenshots/random/player/${playerId}`)
 }
 
 export async function getScreenshotCard(id: string): Promise<ScreenshotCard> {

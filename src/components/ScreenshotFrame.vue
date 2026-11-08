@@ -37,6 +37,13 @@
         <div v-if="blurActive" class="fx-vignette" aria-hidden="true"></div>
         <div v-if="showMeta && !compact" class="bottom-scrim" aria-hidden="true"></div>
 
+        <div v-if="recentComments.length" class="recent-comments" aria-label="Последние комментарии">
+          <div v-for="comment in recentComments" :key="comment.id" class="recent-comment">
+            <span class="recent-author">{{ comment.author }}</span>
+            <span class="recent-text">{{ comment.text }}</span>
+          </div>
+        </div>
+
         <div
           v-if="canConfigure && effectsOpen"
           class="fx-controls"
@@ -188,7 +195,7 @@
           </div>
         </div>
 
-        <div v-if="showViews || actionable || showSocialActions" class="frame-actions">
+        <div v-if="showViews || actionable || showSocialActions || youtubeSearchUrl" class="frame-actions">
           <div
             v-if="showViews && !viewsTopRight"
             class="views"
@@ -200,6 +207,21 @@
             </svg>
             <span>{{ formatViews(card.views) }}</span>
           </div>
+
+          <a
+            v-if="youtubeSearchUrl"
+            class="action-btn youtube-btn"
+            :href="youtubeSearchUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Найти видео на YouTube"
+            aria-label="Найти видео на YouTube"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z" />
+              <polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" />
+            </svg>
+          </a>
 
           <button
             v-if="showShareAction"
@@ -251,7 +273,18 @@
       </div>
 
       <div v-if="showMeta" ref="captionEl" class="caption">
-        <div v-if="card.players.length" class="players">{{ card.players.join(' · ') }}</div>
+        <div v-if="card.players.length" class="players">
+          <template v-for="(player, index) in card.players" :key="`${card.id}-${index}`">
+            <span v-if="index" class="player-separator"> · </span>
+            <router-link
+              v-if="playerLinksEnabled && card.playerIds?.[index]"
+              class="player-link"
+              :to="{ name: 'player-dossier', params: { id: card.playerIds[index] } }"
+              :title="`Открыть досье: ${player}`"
+            >{{ player }}</router-link>
+            <span v-else>{{ player }}</span>
+          </template>
+        </div>
         <div class="meta-row">
           <span v-if="card.matchDate" class="date">{{ formatDate(card.matchDate) }}</span>
           <span v-if="card.clubName" class="club">{{ card.clubName }}</span>
@@ -264,8 +297,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { CSSProperties } from 'vue'
-import type { FrameEffectSettings, ScreenshotCard } from '@/api'
-import { screenshotImageUrl, sharedScreenshotUrl } from '@/api'
+import type { FrameEffectSettings, ScreenshotCard, ScreenshotComment } from '@/api'
+import { getScreenshotComments, screenshotImageUrl, sharedScreenshotUrl } from '@/api'
 import { formatDateRu } from '@/common'
 import { DEFAULT_FRAME_EFFECTS, frameEffectsStore } from '@/stores/frameEffects'
 import { authStore } from '@/stores/auth'
@@ -337,6 +370,8 @@ const settingsDirty = ref(false)
 const commentsOpen = ref(false)
 const shareOpen = ref(false)
 const commentsCount = ref(props.card.comments)
+const recentComments = ref<ScreenshotComment[]>([])
+const recentCommentsLarge = ref(false)
 
 const frameImg = ref<HTMLImageElement | null>(null)
 const pixelCanvas = ref<HTMLCanvasElement | null>(null)
@@ -346,6 +381,23 @@ const canConfigure = computed(() => props.effects && auth.isAdmin)
 const showViews = computed(() => props.viewsTopRight || props.card.views > 1)
 const showSocialActions = computed(() => auth.isAuthenticated)
 const showShareAction = computed(() => auth.isAuthenticated && !props.shareToken)
+const playerLinksEnabled = computed(() => auth.isAuthenticated)
+
+/*
+ * Ссылка на поиск видео матча на YouTube. Для 2026 года видео публикуются
+ * с задержкой, поэтому кнопка нужна только для турниров и кадров старше 2026.
+ */
+const youtubeSearchUrl = computed(() => {
+  const date = props.card.matchDate
+  if (!date) {
+    return null
+  }
+  const year = Number.parseInt(date.slice(0, 4), 10)
+  if (Number.isNaN(year) || (year >= 2026 && !props.card.tournament)) {
+    return null
+  }
+  return `https://www.youtube.com/@badm-lesteh/search?query=${date}%20%2F`
+})
 
 const saveStatusText = computed(() => {
   if (saveState.value === 'saving') {
@@ -432,6 +484,9 @@ function releaseObjectUrl() {
  * считается по фактическим размерам сцены, а не через container queries.
  */
 const COMPACT_MEDIA = '(max-width: 1024px) and (orientation: portrait)'
+
+/* Последние комментарии показываем только на больших экранах. */
+const RECENT_COMMENTS_MEDIA = '(min-width: 900px)'
 
 const compact = ref(false)
 const figureEl = ref<HTMLElement | null>(null)
@@ -1108,6 +1163,38 @@ function onCommentCreated() {
   commentsCount.value++
 }
 
+let recentCommentsVersion = 0
+let recentCommentsQuery: MediaQueryList | null = null
+
+async function loadRecentComments() {
+  const version = ++recentCommentsVersion
+  if (
+    !props.full
+    || !recentCommentsLarge.value
+    || !auth.isAuthenticated
+    || commentsCount.value <= 0
+  ) {
+    recentComments.value = []
+    return
+  }
+  try {
+    const comments = await getScreenshotComments(props.card.id)
+    if (version !== recentCommentsVersion) {
+      return
+    }
+    // API отдаёт комментарии от старых к новым — оставляем три последних.
+    recentComments.value = comments.slice(-5)
+  } catch {
+    if (version === recentCommentsVersion) {
+      recentComments.value = []
+    }
+  }
+}
+
+function onRecentCommentsQueryChange(event: MediaQueryListEvent): void {
+  recentCommentsLarge.value = event.matches
+}
+
 defineExpose({ runTransition })
 
 watch(
@@ -1157,6 +1244,13 @@ watch(
   }
 )
 
+watch(
+  () => [props.card.id, props.full, recentCommentsLarge.value, auth.isAuthenticated, commentsCount.value],
+  () => {
+    void loadRecentComments()
+  }
+)
+
 watch(compact, () => {
   measure()
 })
@@ -1184,6 +1278,12 @@ onMounted(() => {
   compactQuery = window.matchMedia(COMPACT_MEDIA)
   applyCompact(compactQuery.matches)
   compactQuery.addEventListener('change', onCompactQueryChange)
+
+  recentCommentsQuery = window.matchMedia(RECENT_COMMENTS_MEDIA)
+  recentCommentsLarge.value = recentCommentsQuery.matches
+  recentCommentsQuery.addEventListener('change', onRecentCommentsQueryChange)
+  void loadRecentComments()
+
   stageObserver = new ResizeObserver(() => measure())
   if (stageEl.value) {
     stageObserver.observe(stageEl.value)
@@ -1200,6 +1300,9 @@ onMounted(() => {
 onBeforeUnmount(() => {
   compactQuery?.removeEventListener('change', onCompactQueryChange)
   compactQuery = null
+  recentCommentsQuery?.removeEventListener('change', onRecentCommentsQueryChange)
+  recentCommentsQuery = null
+  recentCommentsVersion++
   stageObserver?.disconnect()
   stageObserver = null
   if (renderTimer) {
@@ -1632,6 +1735,60 @@ onBeforeUnmount(() => {
   overflow-wrap: anywhere;
 }
 
+.caption .player-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.caption .player-link:hover,
+.caption .player-link:focus-visible {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.caption .player-separator {
+  color: inherit;
+}
+
+/* Последние комментарии: полупрозрачная подпись над кнопками в правом нижнем углу. */
+.recent-comments {
+  position: absolute;
+  right: 0.75rem;
+  bottom: calc(0.75rem + var(--frame-btn-size) + 0.9rem);
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-width: min(38%, 420px);
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  line-height: 1.35;
+  text-align: right;
+  opacity: 0.55;
+  pointer-events: none;
+  text-shadow: 0 1px 4px var(--accent-dark);
+}
+
+.recent-comment {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+}
+
+.recent-author {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.recent-text {
+  display: -webkit-box;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
 .meta-row {
   display: flex;
   align-items: center;
@@ -1725,6 +1882,20 @@ onBeforeUnmount(() => {
   height: var(--frame-btn-icon);
 }
 
+.youtube-btn {
+  text-decoration: none;
+}
+
+.youtube-btn:hover {
+  color: var(--accent-dark);
+  text-decoration: none;
+}
+
+.youtube-btn svg {
+  width: calc(var(--frame-btn-icon) * 0.82);
+  height: calc(var(--frame-btn-icon) * 0.82);
+}
+
 .action-badge {
   position: absolute;
   top: -2px;
@@ -1760,6 +1931,11 @@ onBeforeUnmount(() => {
   .frame--full .frame-actions {
     right: 2.5rem;
     bottom: 2rem;
+  }
+
+  .recent-comments {
+    right: 2.5rem;
+    bottom: calc(2rem + var(--frame-btn-size) + 1rem);
   }
 
   .fx-dock {

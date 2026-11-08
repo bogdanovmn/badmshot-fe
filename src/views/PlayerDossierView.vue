@@ -1,5 +1,14 @@
 <template>
   <div class="page">
+    <ScreenshotImage
+      v-if="backgroundId"
+      class="dossier-background"
+      :id="backgroundId"
+      :width="1920"
+      alt=""
+      loading="eager"
+    />
+
     <div class="heading-row">
       <BackButton fallback="/archive/stats" />
       <div class="heading-text">
@@ -162,6 +171,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   getErrorMessage,
+  getPlayerBackground,
   getPlayerDossier,
   getTopScreenshots
 } from '@/api'
@@ -171,6 +181,7 @@ import BackButton from '@/components/BackButton.vue'
 import ErrorNotice from '@/components/ErrorNotice.vue'
 import FrameThumb from '@/components/FrameThumb.vue'
 import NavIcon from '@/components/NavIcon.vue'
+import ScreenshotImage from '@/components/ScreenshotImage.vue'
 import TagCloudSection from '@/components/TagCloudSection.vue'
 import { authStore } from '@/stores/auth'
 
@@ -211,6 +222,7 @@ const frames = ref<TopScreenshotCard[]>([])
 const framesLoading = ref(false)
 const framesLoaded = ref(false)
 const framesError = ref<string | null>(null)
+const backgroundId = ref('')
 
 const playerId = computed(() => {
   const value = route.params.id
@@ -280,6 +292,28 @@ const clubYearGroups = computed<ClubYearGroup[]>(() => {
   return result
 })
 
+let backgroundVersion = 0
+
+async function loadBackground() {
+  const version = ++backgroundVersion
+  if (!playerId.value) {
+    backgroundId.value = ''
+    return
+  }
+  try {
+    // Сервер выбирает кадр детерминированно на сутки, поэтому фон не «прыгает».
+    const card = await getPlayerBackground(playerId.value)
+    if (version !== backgroundVersion) {
+      return
+    }
+    backgroundId.value = card.id
+  } catch {
+    if (version === backgroundVersion) {
+      backgroundId.value = ''
+    }
+  }
+}
+
 async function load() {
   if (!playerId.value) {
     error.value = 'Игрок не указан.'
@@ -288,6 +322,7 @@ async function load() {
   }
   loading.value = true
   error.value = null
+  void loadBackground()
   try {
     dossier.value = await getPlayerDossier(playerId.value)
   } catch (e) {
@@ -346,12 +381,30 @@ onMounted(load)
 
 <style scoped>
 .page {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
   width: 100%;
   max-width: 900px;
   margin: 0 auto;
+}
+
+/*
+ * Фон досье: случайный кадр с игроком, закреплённый к окну (не двигается при
+ * скролле) и сильно приглушённый, чтобы не мешать чтению досье.
+ */
+.dossier-background {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  width: 100vw;
+  height: 100vh;
+  object-fit: cover;
+  object-position: center;
+  opacity: 0.046;
+  filter: saturate(0.7) brightness(0.9);
+  pointer-events: none;
 }
 
 .heading-row {
